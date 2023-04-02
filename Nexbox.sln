@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nexbox", "Nexbox\Nexbox.csproj", "{8B8685D9-F8C1-4825-BFBA-7A5972B14775}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nexbox.Tests", "Nexbox.Tests\Nexbox.Tests.csproj", "{9E5BC4F7-E148-4595-A4FB-DAB9CC658491}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8B8685D9-F8C1-4825-BFBA-7A5972B14775}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B8685D9-F8C1-4825-BFBA-7A5972B14775}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B8685D9-F8C1-4825-BFBA-7A5972B14775}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B8685D9-F8C1-4825-BFBA-7A5972B14775}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9E5BC4F7-E148-4595-A4FB-DAB9CC658491}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9E5BC4F7-E148-4595-A4FB-DAB9CC658491}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9E5BC4F7-E148-4595-A4FB-DAB9CC658491}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9E5BC4F7-E148-4595-A4FB-DAB9CC658491}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
