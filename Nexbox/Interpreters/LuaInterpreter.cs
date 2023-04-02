@@ -16,7 +16,7 @@ public class LuaInterpreter : IInterpreter
     public void ForwardType(string module, Type type)
     {
         UserData.RegisterType(type, InteropAccessMode.BackgroundOptimized);
-        _script.Globals[module] = Activator.CreateInstance(type);
+        _script.Globals[module] = new Func<object>(() => Activator.CreateInstance(type));
     }
 
     public void RunScript(string script, Action<Exception> OnException = null)

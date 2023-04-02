@@ -14,20 +14,28 @@ if (r.ToLower().Contains("lua"))
 else
     i = new JavaScriptInterpreter();
 i.StartSandbox(Console.WriteLine);
+i.CreateGlobal("one", 1);
 i.ForwardType("tools", typeof(TestClass));
 i.ForwardType("ObjectData", typeof(ObjectData));
-if(isLua)
-    i.RunScript("print(\"hi\") \r\n" +
-                "local sum = tools.AddNumbers(1, 5) \r\n" +
-                "local o = tools.GetObjectData(sum) \r\n" +
-                "print(o.a) \r\n" +
-                "print(o.getB())");
+if (isLua)
+{
+    i.RunScript("print(tools().AddNumbers(one, 10))");
+    i.RunScript("local data1 = ObjectData() \r\n" +
+                "local data2 = ObjectData() \r\n" +
+                "data1.a = 5 \r\n" +
+                "data2.a = 7 \r\n" +
+                "print(\"data1 is \"..tostring(data1.a)..\" and data2 is \"..tostring(data2.a))", Console.WriteLine);
+}
 else
-    i.RunScript("const t = new tools() \r\n" +
-                "print(\"hi\") \r\n" +
-                "let sum = t.AddNumbers(1, 5) \r\n" +
-                "let o = t.GetObjectData(sum) \r\n" +
-                "print(o.a) \r\n" +
-                "print(o.getB()) \r\n" +
-                "print(o.b)");
+{
+    i.RunScript("print(new tools().AddNumbers(one, 10))");
+    i.RunScript("let data1 = new ObjectData() \r\n" +
+                "let data2 = new ObjectData() \r\n" +
+                "data1.a = 5 \r\n" +
+                "data2.a = 7 \r\n" +
+                "print(\"data1 is \" + data1.a + \" and data2 is \" + data2.a)");
+    i.RunScript("let data3 = new ObjectData(5) \r\n" +
+                "let data4 = new ObjectData(7) \r\n" +
+                "print(\"data3 is \" + data3.a + \" and data4 is \" + data4.a)", Console.WriteLine);
+}
 i.Stop();
