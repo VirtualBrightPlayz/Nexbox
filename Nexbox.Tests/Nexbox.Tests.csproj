@@ -16,19 +16,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <None Update="pybuilds\pocketpy.dll">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Generator>Nexbox.Tests</Generator>
-        <CustomToolNamespace>Nexbox.Tests</CustomToolNamespace>
-      </None>
-      <None Update="pybuilds\pocketpy.exe">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Generator>Nexbox.Tests</Generator>
-        <CustomToolNamespace>Nexbox.Tests</CustomToolNamespace>
-      </None>
-    </ItemGroup>
-
-    <ItemGroup>
       <PackageReference Include="System.Net.Http" Version="4.3.4" />
     </ItemGroup>
 
