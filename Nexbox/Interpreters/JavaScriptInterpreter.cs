@@ -8,7 +8,9 @@ public class JavaScriptInterpreter : IInterpreter
 {
     internal bool stop;
     internal Engine engine;
-        
+    [ThreadStatic]
+    internal static Engine activeEngine;
+
     public void StartSandbox(Action<object> print)
     {
         if (stop || engine != null)
@@ -40,11 +42,14 @@ public class JavaScriptInterpreter : IInterpreter
     {
         if (stop)
             return;
+
+        activeEngine = engine;
         try
         {
             engine.Execute(script);
         }
         catch(Exception e){ OnException?.Invoke(e); }
+        activeEngine = null;
     }
 
     public void Stop()

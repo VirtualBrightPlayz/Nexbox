@@ -4,7 +4,7 @@ public class TestClass
 {
     public int AddNumbers(int a, int b) => a + b;
 
-    public void CreateAndExec(SandboxFunc f, params object[] args) => SandboxFuncTools.InvokeSandboxFunc(f, args);
+    public void CreateAndExec(object f, params object[] args) => SandboxFuncTools.InvokeSandboxFunc(SandboxFuncTools.TryConvert(f), args);
 
     private static List<(SandboxFunc, object[])> execs = new List<(SandboxFunc, object[])>();
 
