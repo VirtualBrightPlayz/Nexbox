@@ -10,7 +10,7 @@ public class SandboxFunc
 {
     private LuaInterpreter s;
     private JavaScriptInterpreter e;
-    private Delegate a;
+    internal Delegate a;
     
     public SandboxFunc(){}
 
