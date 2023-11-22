@@ -21,6 +21,7 @@ i.ForwardType("tools", typeof(TestClass));
 i.ForwardType("ObjectData", typeof(ObjectData));
 i.ForwardType("SomeEnum", typeof(SomeEnum));
 i.ForwardType("StaticExample", typeof(StaticExample));
+i.ForwardType("RandomStruct", typeof(RandomStruct));
 if (isLua)
 {
     i.RunScript("print(tools().AddNumbers(one, 10))");
@@ -46,6 +47,10 @@ if (isLua)
     i.RunScript("local data5 = ObjectData(nil, 3)\r\nprint(\"b is: \"..tostring(data5.a)..\" and c is \"..tostring(data5.c))", Console.WriteLine);
     i.RunScript("local data6 = ObjectData(8, nil)\r\nprint(\"b is: \"..tostring(data6.a)..\" and c is \"..tostring(data6.c))", Console.WriteLine);
     i.RunScript("tools().CreateAndExec(function() print(\"pretty function!\") end)", Console.WriteLine);
+    i.RunScript("local rc = RandomStruct()\r\n" +
+                "rc.a = \"Hello\"\r\n" +
+                "rc.b = \"World!\"\r\n" +
+                "print(rc.a..\" \"..rc.b)", Console.WriteLine);
 }
 else
 {
@@ -67,6 +72,10 @@ else
     i.RunScript("print(data1.values['a'] + ' ' + data1.values['b'] + ' ' + data1.values['c'])");
     i.RunScript("new tools().CreateAndExec(new SandboxFunc(engine).SetAction((x, y) => { print('Some Event Happened!') }), 'a')", Console.WriteLine);
     i.RunScript("new tools().CreateAndExecLater(new SandboxFunc(engine).SetAction(() => print('Bad!')))", Console.WriteLine);
+    i.RunScript("let rc = new RandomStruct()\r\n" +
+                "rc.a = \"Hello\"\r\n" +
+                "rc.b = \"World!\"\r\n" +
+                "print(rc.a + \" \" + rc.b)", Console.WriteLine);
 }
 i.Stop();
 TestClass.exec();

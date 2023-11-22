@@ -110,7 +110,8 @@ public class LuaInterpreter : IInterpreter
                             }
                         } catch(Exception){}
                     }
-                    throw new Exception("Could not find constructor from given parameters!");
+                    // Assume constructor-less type
+                    return Activator.CreateInstance(type);
                 });
     }
 
