@@ -10,6 +10,7 @@ public class ObjectData
         set => b = value;
     }
     private int b;
+    public int c= -1;
 
     public Dictionary<string, float> values = new()
     {
@@ -22,4 +23,9 @@ public class ObjectData
     
     public ObjectData(){}
     public ObjectData(int b) => this.b = b;
+    public ObjectData(int b, int c)
+    {
+        this.b = b;
+        this.c = c;
+    }
 }

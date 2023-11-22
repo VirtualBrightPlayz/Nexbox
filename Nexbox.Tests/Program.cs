@@ -41,6 +41,11 @@ if (isLua)
                 "print(tostring(data1.values['a'])..' '..tostring(data1.values['b'])..' '..tostring(data1.values['c']))", Console.WriteLine);
     i.RunScript("tools().CreateAndExec(SandboxFunc().SetAction(function(x, y) print('Some Event Happened!') end), 'a')", Console.WriteLine);
     i.RunScript("tools().CreateAndExecLater(SandboxFunc().SetAction(function() print('Bad!') end))", Console.WriteLine);
+    i.RunScript("local data3 = ObjectData(nilctor, 3)\r\nprint(\"b is: \"..tostring(data3.a)..\" and c is \"..tostring(data3.c))", Console.WriteLine);
+    i.RunScript("local data4 = ObjectData(8, nilctor)\r\nprint(\"b is: \"..tostring(data4.a)..\" and c is \"..tostring(data4.c))", Console.WriteLine);
+    i.RunScript("local data5 = ObjectData(nil, 3)\r\nprint(\"b is: \"..tostring(data5.a)..\" and c is \"..tostring(data5.c))", Console.WriteLine);
+    i.RunScript("local data6 = ObjectData(8, nil)\r\nprint(\"b is: \"..tostring(data6.a)..\" and c is \"..tostring(data6.c))", Console.WriteLine);
+    i.RunScript("tools().CreateAndExec(function() print(\"pretty function!\") end)", Console.WriteLine);
 }
 else
 {

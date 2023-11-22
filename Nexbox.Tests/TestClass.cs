@@ -8,6 +8,7 @@ public class TestClass
 
     private static List<(SandboxFunc, object[])> execs = new List<(SandboxFunc, object[])>();
 
+    [Obsolete("Use CreateAndExec")]
     public void CreateAndExecLater(SandboxFunc f, params object[] args) => execs.Add((f, args));
 
     internal static void exec()
