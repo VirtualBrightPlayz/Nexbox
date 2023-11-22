@@ -107,5 +107,3 @@ and for Lua, do
 ```lua
 local obj = Type()
 ```
-
-There **MUST** be a parameter-less constructor, otherwise an exception will be thrown when Forwarding the Type in Lua.
