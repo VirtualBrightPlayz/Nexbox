@@ -5,8 +5,8 @@ A Simple C# Sandboxing Library Supporting Multiple Languages
 
 1) Select your target framework
     
-    + `48build/Nexbox.dll` for net48
-    + `60build/Nexbox.dll` for net6.0
+    + `net48/Nexbox.dll` for net48
+    + `net6.0/Nexbox.dll` for net6.0
 2) Import the reference
 3) Create a new `IInterpreter`
     
