@@ -15,11 +15,8 @@ public class JavaScriptInterpreter : IInterpreter
     {
         if (stop || engine != null)
             return;
-        engine = new Engine(options =>
-        {
-            options.LimitMemory(4_000_000);
-        });
-        engine.SetValue("print", new Action<object>(print));
+        engine = new Engine();
+        engine.SetValue("print", print);
         CreateGlobal("engine", new JsEngine(this));
         ForwardType("SandboxFunc", typeof(SandboxFunc));
     }
