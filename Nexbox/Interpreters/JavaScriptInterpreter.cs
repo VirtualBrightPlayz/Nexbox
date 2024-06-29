@@ -49,6 +49,11 @@ public class JavaScriptInterpreter : IInterpreter
         activeEngine = null;
     }
 
+    public SandboxFunc GetGlobalFunction(string name)
+    {
+        return new SandboxFunc(this).SetAction(engine.GetValue(name));
+    }
+
     public void Stop()
     {
         if (stop)

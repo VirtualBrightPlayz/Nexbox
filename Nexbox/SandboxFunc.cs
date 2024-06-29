@@ -1,5 +1,7 @@
 ﻿using System.Reflection;
+using Jint;
 using Jint.Native;
+using Jint.Native.Function;
 using MoonSharp.Interpreter;
 using Nexbox.Internals;
 using Nexbox.Interpreters;
@@ -26,20 +28,37 @@ public class SandboxFunc
             throw new Exception("Invalid engine!");
     }
 
+    internal SandboxFunc(IInterpreter interpreter)
+    {
+        if (interpreter is JavaScriptInterpreter)
+            e = (JavaScriptInterpreter)interpreter;
+        else if (interpreter is LuaInterpreter)
+            s = (LuaInterpreter)interpreter;
+        else
+            throw new Exception("Invalid engine!");
+    }
+
     public SandboxFunc SetAction(object func)
     {
-        a = new Action<object>(args =>
+        a = new Func<object, object>(args =>
         {
+            if (e != null && func is JsValue)
+            {
+                List<JsValue> vals = new List<JsValue>();
+                foreach (object o in (List<object>) args)
+                    vals.Add(JsValue.FromObject(e.engine, o));
+                JsValue ret = ((JsValue)func).Call(null, vals.ToArray());
+                return ret?.ToObject();
+            }
             foreach (MethodInfo methodInfo in func.GetType().GetMethods())
             {
-                if (methodInfo.Name.Contains("Call"))
+                if (s != null && methodInfo.Name.Contains("Call"))
                 {
                     ScriptFunctionDelegate s =
                         LuaInterpreter.ClosureToDelegate((Closure) func);
-                    ((Closure) func).Call(((List<object>) args).ToArray());
-                    break;
+                    return ((Closure) func).Call(((List<object>) args).ToArray())?.ToObject();
                 }
-                if (methodInfo.Name.Contains("Invoke"))
+                if (e != null && methodInfo.Name.Contains("Invoke"))
                 {
                     List<JsValue> vals = new List<JsValue>();
                     foreach (object o in (List<object>) args)
@@ -47,20 +66,21 @@ public class SandboxFunc
                     object[] p = new object[2];
                     p[0] = null;
                     p[1] = vals.ToArray();
-                    methodInfo.Invoke(func, p);
-                    break;
+                    JsValue ret = (JsValue)methodInfo.Invoke(func, p);
+                    return ret?.ToObject();
                 }
             }
+            return null;
         });
         return this;
     }
 
-    private void Invoke(object[] args)
+    private object Invoke(object[] args)
     {
         if (e != null && e.stop)
-            return;
+            return null;
         if (s != null && s.stop)
-            return;
-        a.DynamicInvoke(args.ToList());
+            return null;
+        return a.DynamicInvoke(args.ToList());
     }
 }

@@ -51,6 +51,8 @@ if (isLua)
                 "rc.a = \"Hello\"\r\n" +
                 "rc.b = \"World!\"\r\n" +
                 "print(rc.a..\" \"..rc.b)", Console.WriteLine);
+    i.RunScript("function myFunc () print(\"hi\") end", Console.WriteLine);
+    i.RunScript("function myFuncRet () return 1 end", Console.WriteLine);
 }
 else
 {
@@ -76,6 +78,10 @@ else
                 "rc.a = \"Hello\"\r\n" +
                 "rc.b = \"World!\"\r\n" +
                 "print(rc.a + \" \" + rc.b)", Console.WriteLine);
+    i.RunScript("function myFunc() { print(\"hi\"); }", Console.WriteLine);
+    i.RunScript("var myFuncRet = function () { return 1; };", Console.WriteLine);
 }
+i.GetGlobalFunction("myFunc").InvokeSandboxFunc();
+Console.WriteLine(i.GetGlobalFunction("myFuncRet").InvokeSandboxFunc());
 i.Stop();
 TestClass.exec();

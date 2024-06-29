@@ -7,15 +7,13 @@ namespace Nexbox;
 
 public static class SandboxFuncTools
 {
-    public static void InvokeSandboxFunc(SandboxFunc f, params object[] args)
+    private static readonly MethodInfo invokeMethod = typeof(SandboxFunc).GetMethod("Invoke", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    public static object InvokeSandboxFunc(this SandboxFunc f, params object[] args)
     {
-        foreach (MethodInfo methodInfo in f.GetType().GetMethods(BindingFlags.Instance | BindingFlags.NonPublic))
-        {
-            if(methodInfo.Name != "Invoke") continue;
-            object[] p = new object[1];
-            p[0] = args;
-            methodInfo.Invoke(f, p);
-        }
+        object[] p = new object[1];
+        p[0] = args;
+        return invokeMethod.Invoke(f, p);
     }
 
     public static SandboxFunc TryConvert(object func)

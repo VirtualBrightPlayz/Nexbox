@@ -126,6 +126,11 @@ public class LuaInterpreter : IInterpreter
         catch(Exception e){ OnException?.Invoke(e); }
     }
 
+    public SandboxFunc GetGlobalFunction(string name)
+    {
+        return new SandboxFunc(this).SetAction(_script.Globals[name]);
+    }
+
     public void Stop()
     {
         if (stop)
