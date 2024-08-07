@@ -12,11 +12,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Nexbox\Nexbox.csproj" />
+        <ProjectReference Include="..\Nexbox\Nexbox.csproj" />
+        <ProjectReference Include="..\Nexbox.RiscV\CSharp\Nexbox.RiscV.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="System.Net.Http" Version="4.3.4" />
+        <PackageReference Include="System.Net.Http" Version="4.3.4" />
     </ItemGroup>
 
 </Project>

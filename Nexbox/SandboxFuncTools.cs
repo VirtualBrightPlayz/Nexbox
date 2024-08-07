@@ -20,6 +20,8 @@ public static class SandboxFuncTools
 
     public static SandboxFunc TryConvert(object func)
     {
+        return new SandboxFunc().SetAction(func);
+        /*
         switch (func)
         {
             case SandboxFunc _:
@@ -44,7 +46,8 @@ public static class SandboxFuncTools
                     }),
                 };
             default:
-                return null;
+                return new SandboxFunc().SetAction(func);
         }
+        */
     }
 }

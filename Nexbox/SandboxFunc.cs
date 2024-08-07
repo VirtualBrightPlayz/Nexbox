@@ -8,8 +8,7 @@ namespace Nexbox;
 
 public class SandboxFunc
 {
-    private LuaInterpreter s;
-    private JavaScriptInterpreter e;
+    private IInterpreter e;
     internal Delegate a;
     
     public SandboxFunc(){}
@@ -17,11 +16,9 @@ public class SandboxFunc
     public SandboxFunc(object script)
     {
         Type t = script.GetType();
-        if (t == typeof(JsEngine))
-            e = (JavaScriptInterpreter) t.GetField("e", BindingFlags.Instance | BindingFlags.NonPublic)
-                .GetValue(script);
-        else if (t == typeof(LuaEngine))
-            s = (LuaInterpreter) t.GetField("e", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(script);
+        FieldInfo f = t.GetField("e", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (script is IScriptEngine && f != null)
+            e = (IInterpreter)f.GetValue(script);
         else
             throw new Exception("Invalid engine!");
     }
@@ -30,6 +27,8 @@ public class SandboxFunc
     {
         a = new Action<object>(args =>
         {
+            e.CallFunction(func, args);
+            /*
             foreach (MethodInfo methodInfo in func.GetType().GetMethods())
             {
                 if (methodInfo.Name.Contains("Call"))
@@ -51,15 +50,14 @@ public class SandboxFunc
                     break;
                 }
             }
+            */
         });
         return this;
     }
 
     private void Invoke(object[] args)
     {
-        if (e != null && e.stop)
-            return;
-        if (s != null && s.stop)
+        if (e != null && e.IsStopped)
             return;
         a.DynamicInvoke(args.ToList());
     }

@@ -2,7 +2,7 @@
 
 namespace Nexbox.Internals;
 
-internal class LuaEngine
+internal class LuaEngine : IScriptEngine
 {
     internal LuaInterpreter e;
 

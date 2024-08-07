@@ -1,4 +1,6 @@
-﻿using Jint;
+﻿using System.Reflection;
+using Jint;
+using Jint.Native;
 using Jint.Runtime.Interop;
 using Nexbox.Internals;
 
@@ -10,6 +12,8 @@ public class JavaScriptInterpreter : IInterpreter
     internal Engine engine;
     [ThreadStatic]
     internal static Engine activeEngine;
+
+    public bool IsStopped => stop;
 
     public void StartSandbox(Action<object> print)
     {
@@ -55,5 +59,28 @@ public class JavaScriptInterpreter : IInterpreter
             return;
         stop = true;
         engine.Dispose();
+    }
+
+    public IScriptEngine GetEngine()
+    {
+        return new JsEngine(this);
+    }
+
+    public void CallFunction(object func, object args)
+    {
+        foreach (MethodInfo methodInfo in func.GetType().GetMethods())
+        {
+            if (methodInfo.Name.Contains("Invoke"))
+            {
+                List<JsValue> vals = new List<JsValue>();
+                foreach (object o in (List<object>) args)
+                    vals.Add(JsValue.FromObject(engine, o));
+                object[] p = new object[2];
+                p[0] = null;
+                p[1] = vals.ToArray();
+                methodInfo.Invoke(func, p);
+                break;
+            }
+        }
     }
 }

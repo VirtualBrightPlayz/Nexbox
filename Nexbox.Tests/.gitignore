@@ -1,0 +1,4 @@
+riscv_capi.dll
+riscv/api.h
+riscv/test.elf
+riscv/test.dat

@@ -2,7 +2,7 @@
 
 namespace Nexbox.Internals;
 
-internal class JsEngine
+internal class JsEngine : IScriptEngine
 {
     internal JavaScriptInterpreter e;
 

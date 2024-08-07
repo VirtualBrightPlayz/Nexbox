@@ -34,15 +34,16 @@ typedef struct {{
         public const string HEADER_CLASS_DEF = "#define {0} void*\n";
 
         public const string HEADER_FUNC_RET = @"
-static inline {0} api_{1}({2}) {{
+static inline {0} {1}({2}) {{
     UserArgStruct args;
 {3}
     {4}pusercall(""{1}"", &args);
 }}
 ";
         public const string HEADER_FUNC_ARG_SIG = "{0} arg{1}";
-        public const string HEADER_FUNC_TARGET = "    args.target = arg{0};";
+        public const string HEADER_FUNC_TARGET = "    args.target = (void*)arg{0};";
         public const string HEADER_FUNC_ARG_PTR = "    args.args[{0}] = &arg{0};";
+        public const string HEADER_FUNC_ARG_NOPTR = "    args.args[{0}] = arg{0};";
 
         public const string HEADER_END = @"
 #endif // APICALL_H
@@ -60,6 +61,16 @@ static inline {0} api_{1}({2}) {{
         private bool stopped = false;
         private Dictionary<ulong, object> targets;
         private ulong targetIdCounter;
+
+        internal class LibRiscVEngine : IScriptEngine
+        {
+            internal LibRiscVInterpreter e;
+            internal LibRiscVEngine(LibRiscVInterpreter e) => this.e = e;
+        }
+
+        #region APIs
+
+        public bool IsStopped => stopped;
 
         public void StartSandbox(Action<object> print)
         {
@@ -82,6 +93,22 @@ static inline {0} api_{1}({2}) {{
             {
                 globalObjs.Add(name, global);
                 Type type = global.GetType();
+                if (type == typeof(void))
+                    return;
+                if (type == typeof(string))
+                    return;
+                if (type == typeof(ulong))
+                    return;
+                if (type == typeof(long))
+                    return;
+                if (type == typeof(uint))
+                    return;
+                if (type == typeof(int))
+                    return;
+                if (type == typeof(float))
+                    return;
+                if (type == typeof(bool))
+                    return;
                 foreach (var info in type.GetMethods(BindingFlags.Instance | BindingFlags.Public))
                 {
                     string n = $"g_{name}_{info.Name}";
@@ -128,6 +155,20 @@ static inline {0} api_{1}({2}) {{
             box?.Dispose();
         }
 
+        public IScriptEngine GetEngine()
+        {
+            return new LibRiscVEngine(this);
+        }
+
+        public void CallFunction(object func, object args)
+        {
+            Jump((ulong)func, ((List<object>)args).ToArray());
+        }
+
+        #endregion
+
+        #region Custom APIs
+
         private unsafe struct UserArgStruct
         {
             public ulong target;
@@ -141,6 +182,26 @@ static inline {0} api_{1}({2}) {{
                 if (funcs.TryGetValue(func, out var val))
                 {
                     return val.Invoke(this, vaddr);
+                }
+                if (globalObjs.TryGetValue(func, out var obj))
+                {
+                    object ret = obj;
+                    if (stopped)
+                        return 0;
+                    if (ret == null)
+                        return 0;
+                    else if (ret is string str)
+                        return MemAllocString(str);
+                    else if (ret.GetType().IsValueType)
+                        return MemAllocObject(ret);
+                    else
+                    {
+                        if (!targets.ContainsValue(ret))
+                        {
+                            targets.Add(targetIdCounter++, ret);
+                        }
+                        return targets.FirstOrDefault(x => x.Value == ret).Key;
+                    }
                 }
                 else if (methods.TryGetValue(func, out var method))
                 {
@@ -341,9 +402,11 @@ static inline {0} api_{1}({2}) {{
             }
         }
 
+        #endregion
+
         #region Headers
 
-        private List<Type> headerExportedTypes = new List<Type>();
+        private Queue<Type> headerExportedTypes = new Queue<Type>();
 
         public string ExportHeader()
         {
@@ -352,6 +415,10 @@ static inline {0} api_{1}({2}) {{
             sb.Append(HEADER_START);
 
             StringBuilder body = new StringBuilder();
+            foreach (var kvp in globalObjs)
+            {
+                body.Append(ExportHeaderGlobal(kvp.Key, kvp.Value.GetType()));
+            }
             foreach (var kvp in delegates)
             {
                 body.Append(ExportHeaderFunction(kvp.Key, kvp.Value.Method, 1));
@@ -361,9 +428,22 @@ static inline {0} api_{1}({2}) {{
                 body.Append(ExportHeaderFunction(kvp.Key, kvp.Value));
             }
 
-            foreach (var t in headerExportedTypes)
+            List<Type> exported = new List<Type>();
+            while (headerExportedTypes.Count > 0)
             {
-                sb.Append(ExportHeaderStruct(t));
+                Type t = headerExportedTypes.Dequeue();
+                if (exported.Contains(t))
+                    continue;
+                exported.Add(t);
+                Type nt = Nullable.GetUnderlyingType(t);
+                if (nt != null)
+                {
+                    if (!nt.IsArray)
+                        sb.Append(ExportHeaderStruct(nt));
+                    continue;
+                }
+                if (!t.IsArray)
+                    sb.Append(ExportHeaderStruct(t));
             }
             sb.Append(body.ToString());
 
@@ -386,6 +466,14 @@ static inline {0} api_{1}({2}) {{
             return sb.ToString();
         }
 
+        public string ExportHeaderGlobal(string name, Type type)
+        {
+            StringBuilder sb = new StringBuilder();
+            string ret = GetCType(type) + "*";
+            sb.Append(string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})"));
+            return sb.ToString();
+        }
+
         public string ExportHeaderFunction(string name, MethodInfo info, int skip = 0)
         {
             ParameterInfo[] margs = info.GetParameters().Skip(skip).ToArray();
@@ -401,7 +489,7 @@ static inline {0} api_{1}({2}) {{
             for (int i = start; i < len; i++)
             {
                 args[i] = string.Format(HEADER_FUNC_ARG_SIG, GetCType(margs[i-start].ParameterType), i);
-                code[i] = string.Format(HEADER_FUNC_ARG_PTR, i);
+                code[i] = string.Format(margs[i-start].ParameterType.IsValueType ? HEADER_FUNC_ARG_PTR : HEADER_FUNC_ARG_NOPTR, i);
             }
             if (!info.IsStatic && skip == 0)
             {
@@ -430,9 +518,11 @@ static inline {0} api_{1}({2}) {{
                 return "int";
             if (type == typeof(float))
                 return "float";
+            if (type == typeof(bool))
+                return "char";
             if (!headerExportedTypes.Contains(type) && add)
-                headerExportedTypes.Add(type);
-            return type.Name;
+                headerExportedTypes.Enqueue(type);
+            return type.Name.Replace("`", "_").Replace("&", "").Replace("[]", " *");
         }
 
         #endregion

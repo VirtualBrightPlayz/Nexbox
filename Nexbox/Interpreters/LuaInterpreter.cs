@@ -8,7 +8,9 @@ public class LuaInterpreter : IInterpreter
 {
     internal bool stop;
     private Script _script;
-    
+
+    public bool IsStopped => throw new NotImplementedException();
+
     public void StartSandbox(Action<object> print)
     {
         if (stop || _script != null)
@@ -135,4 +137,14 @@ public class LuaInterpreter : IInterpreter
     }
 
     internal static ScriptFunctionDelegate ClosureToDelegate(Closure c) => c.GetDelegate();
+
+    public IScriptEngine GetEngine()
+    {
+        return new LuaEngine(this);
+    }
+
+    public void CallFunction(object func, object args)
+    {
+        throw new NotImplementedException();
+    }
 }
