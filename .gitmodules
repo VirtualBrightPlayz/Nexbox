@@ -1,0 +1,3 @@
+[submodule "Nexbox.RiscV/C/libriscv"]
+	path = Nexbox.RiscV/C/libriscv
+	url = https://github.com/libriscv/libriscv.git
