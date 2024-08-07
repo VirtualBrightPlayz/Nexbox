@@ -9,7 +9,7 @@ public class LuaInterpreter : IInterpreter
     internal bool stop;
     private Script _script;
 
-    public bool IsStopped => throw new NotImplementedException();
+    public bool IsStopped => stop;
 
     public void StartSandbox(Action<object> print)
     {
@@ -145,6 +145,13 @@ public class LuaInterpreter : IInterpreter
 
     public void CallFunction(object func, object args)
     {
-        throw new NotImplementedException();
+        foreach (MethodInfo methodInfo in func.GetType().GetMethods())
+        {
+            if (methodInfo.Name.Contains("Call"))
+            {
+                ((Closure) func).Call(((List<object>) args).ToArray());
+                break;
+            }
+        }
     }
 }

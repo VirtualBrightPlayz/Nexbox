@@ -79,6 +79,7 @@ switch (i)
         i.RunScript("new tools().CreateAndExec(new SandboxFunc(engine).SetAction((a, b, c) => { print('Hello ' + a + ', ' + b + ', and ' + c + '!') }), 'one', 'two', 'three')", Console.WriteLine);
         i.RunScript("print(data1.values['a'] + ' ' + data1.values['b'] + ' ' + data1.values['c'])");
         i.RunScript("new tools().CreateAndExec(new SandboxFunc(engine).SetAction((x, y) => { print('Some Event Happened!') }), 'a')", Console.WriteLine);
+        i.RunScript("new tools().CreateAndExec(() => print('pretty function!'))", Console.WriteLine);
         i.RunScript("new tools().CreateAndExecLater(new SandboxFunc(engine).SetAction(() => print('Bad!')))", Console.WriteLine);
         i.RunScript("let rc = new RandomStruct()\r\n" +
                     "rc.a = \"Hello\"\r\n" +
