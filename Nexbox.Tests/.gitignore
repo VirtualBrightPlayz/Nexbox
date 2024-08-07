@@ -1,4 +1,5 @@
 riscv_capi.dll
+libriscv_capi.so
 riscv/api.h
 riscv/test.elf
 riscv/test.dat

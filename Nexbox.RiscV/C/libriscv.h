@@ -2,7 +2,12 @@
 #define LIBRISCV_H
 
 #ifndef LIBRISCVAPI
+#ifdef _WIN32
 #define LIBRISCVAPI __declspec(dllexport) __cdecl
+#endif
+#ifdef __GNUC__
+#define LIBRISCVAPI __attribute__((visibility("default"), __cdecl__))
+#endif
 #endif
 
 #ifdef __cplusplus
