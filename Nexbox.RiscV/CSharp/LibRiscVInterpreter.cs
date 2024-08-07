@@ -31,7 +31,7 @@ typedef struct {{
 }} {0};
 ";
         public const string HEADER_STRUCT_PROP = "    {0} {1};";
-        public const string HEADER_CLASS_DEF = "#define {0} void*\n";
+        public const string HEADER_CLASS_DEF = "typedef void* {0};\n";
 
         public const string HEADER_FUNC_RET = @"
 static inline {0} {1}({2}) {{
@@ -57,7 +57,7 @@ static inline {0} {1}({2}) {{
         private Dictionary<string, Type> modules;
         private Dictionary<string, Func<LibRiscVInterpreter, ulong, ulong>> funcs;
         private Dictionary<string, Delegate> delegates;
-        private Dictionary<string, MethodInfo> methods;
+        private Dictionary<string, MethodBase> methods;
         private bool stopped = false;
         private Dictionary<ulong, object> targets;
         private ulong targetIdCounter;
@@ -82,9 +82,11 @@ static inline {0} {1}({2}) {{
             modules = new Dictionary<string, Type>();
             funcs = new Dictionary<string, Func<LibRiscVInterpreter, ulong, ulong>>();
             delegates = new Dictionary<string, Delegate>();
-            methods = new Dictionary<string, MethodInfo>();
+            methods = new Dictionary<string, MethodBase>();
             targets = new Dictionary<ulong, object>();
-            targetIdCounter = 0;
+            targetIdCounter = 1; // start at 1, we don't want null to equal something
+            CreateGlobal("engine", new LibRiscVEngine(this));
+            ForwardType("SandboxFunc", typeof(SandboxFunc));
         }
 
         public void CreateGlobal(string name, object global)
@@ -115,6 +117,12 @@ static inline {0} {1}({2}) {{
                     if (info.DeclaringType == type && !methods.ContainsKey(n))
                         methods.Add(n, info);
                 }
+                foreach (var info in type.GetConstructors(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public))
+                {
+                    string n = $"g_{name}_new_{info.GetParameters().Length}";
+                    if (info.DeclaringType == type && !methods.ContainsKey(n))
+                        methods.Add(n, info);
+                }
             }
         }
 
@@ -126,6 +134,12 @@ static inline {0} {1}({2}) {{
                 foreach (var info in type.GetMethods(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public))
                 {
                     string n = $"{module}_{info.Name}";
+                    if (info.DeclaringType == type && !methods.ContainsKey(n))
+                        methods.Add(n, info);
+                }
+                foreach (var info in type.GetConstructors(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public))
+                {
+                    string n = $"{module}_new_{info.GetParameters().Length}";
                     if (info.DeclaringType == type && !methods.ContainsKey(n))
                         methods.Add(n, info);
                 }
@@ -183,7 +197,7 @@ static inline {0} {1}({2}) {{
                 {
                     return val.Invoke(this, vaddr);
                 }
-                if (globalObjs.TryGetValue(func, out var obj))
+                else if (globalObjs.TryGetValue(func, out var obj))
                 {
                     object ret = obj;
                     if (stopped)
@@ -198,7 +212,8 @@ static inline {0} {1}({2}) {{
                     {
                         if (!targets.ContainsValue(ret))
                         {
-                            targets.Add(targetIdCounter++, ret);
+                            targets.Add(targetIdCounter, ret);
+                            targetIdCounter++;
                         }
                         return targets.FirstOrDefault(x => x.Value == ret).Key;
                     }
@@ -210,15 +225,38 @@ static inline {0} {1}({2}) {{
                     object[] argArr = new object[mArgs.Length];
                     for (int i = 0; i < mArgs.Length; i++)
                     {
-                        object arg = MemGetObjectFromType(args.args[i], mArgs[i].ParameterType);
-                        argArr[i] = arg;
+                        // TODO: add support for arrays
+                        if (!mArgs[i].ParameterType.IsValueType)
+                        {
+                            if (targets.TryGetValue(args.args[i], out var targ))
+                            {
+                                argArr[i] = targ;
+                            }
+                            else if (args.args[i] == 0)
+                            {
+                                argArr[i] = null;
+                            }
+                            else
+                            {
+                                argArr[i] = args.args[i];
+                            }
+                        }
+                        else
+                        {
+                            object arg = MemGetObjectFromType(args.args[i], mArgs[i].ParameterType);
+                            argArr[i] = arg;
+                        }
                     }
                     object target = null;
-                    if (!method.IsStatic)
+                    if (!method.IsStatic && !method.IsConstructor)
                     {
                         targets.TryGetValue(args.target, out target);
                     }
-                    object ret = method.Invoke(target, argArr);
+                    object ret = null;
+                    if (method is ConstructorInfo ctor)
+                        ret = ctor.Invoke(argArr);
+                    else
+                        ret = method.Invoke(target, argArr);
                     if (stopped)
                         return 0;
                     if (ret == null)
@@ -231,11 +269,13 @@ static inline {0} {1}({2}) {{
                     {
                         if (!targets.ContainsValue(ret))
                         {
-                            targets.Add(targetIdCounter++, ret);
+                            targets.Add(targetIdCounter, ret);
+                            targetIdCounter++;
                         }
                         return targets.FirstOrDefault(x => x.Value == ret).Key;
                     }
                 }
+                /*
                 else if (delegates.TryGetValue(func, out var delg))
                 {
                     object target = delg.Target;
@@ -261,6 +301,7 @@ static inline {0} {1}({2}) {{
                     else
                         return 0; // not supported as of now
                 }
+                */
                 throw new Exception($"User System Call not found: {func}");
             }
             return 0;
@@ -474,12 +515,12 @@ static inline {0} {1}({2}) {{
             return sb.ToString();
         }
 
-        public string ExportHeaderFunction(string name, MethodInfo info, int skip = 0)
+        public string ExportHeaderFunction(string name, MethodBase info, int skip = 0)
         {
             ParameterInfo[] margs = info.GetParameters().Skip(skip).ToArray();
             int start = 0;
             int len = margs.Length;
-            if (!info.IsStatic && skip == 0)
+            if (!info.IsStatic && skip == 0 && !info.IsConstructor)
             {
                 start++;
                 len++;
@@ -488,17 +529,21 @@ static inline {0} {1}({2}) {{
             string[] code = new string[len];
             for (int i = start; i < len; i++)
             {
-                args[i] = string.Format(HEADER_FUNC_ARG_SIG, GetCType(margs[i-start].ParameterType), i);
-                code[i] = string.Format(margs[i-start].ParameterType.IsValueType ? HEADER_FUNC_ARG_PTR : HEADER_FUNC_ARG_NOPTR, i);
+                args[i] = string.Format(HEADER_FUNC_ARG_SIG, GetCType(margs[i-start].ParameterType), i-start);
+                code[i] = string.Format(margs[i-start].ParameterType.IsValueType ? HEADER_FUNC_ARG_PTR : HEADER_FUNC_ARG_NOPTR, i-start);
             }
-            if (!info.IsStatic && skip == 0)
+            if (!info.IsStatic && skip == 0 && !info.IsConstructor)
             {
-                args[0] = string.Format(HEADER_FUNC_ARG_SIG, GetCType(info.DeclaringType), 0);
-                code[0] = string.Format(HEADER_FUNC_TARGET, 0);
+                args[0] = string.Format(HEADER_FUNC_ARG_SIG, GetCType(info.DeclaringType), "t");
+                code[0] = string.Format(HEADER_FUNC_TARGET, "t");
             }
-            string ret = GetCType(info.ReturnType);
+            string ret = GetCType(typeof(void));
+            if (info.IsConstructor)
+                ret = GetCType(info.DeclaringType);
+            else if (info is MethodInfo info2)
+                ret = GetCType(info2.ReturnType);
             StringBuilder sb = new StringBuilder();
-            sb.Append(string.Format(HEADER_FUNC_RET, ret, name, string.Join(",", args), string.Join("\n", code), info.ReturnType == typeof(void) ? "" : $"return ({ret})"));
+            sb.Append(string.Format(HEADER_FUNC_RET, ret, name, string.Join(",", args), string.Join("\n", code), ret == "void" ? "" : $"return ({ret})"));
             return sb.ToString();
         }
 
@@ -520,7 +565,7 @@ static inline {0} {1}({2}) {{
                 return "float";
             if (type == typeof(bool))
                 return "char";
-            if (!headerExportedTypes.Contains(type) && add)
+            // if (!headerExportedTypes.Contains(type) /*&& add*/)
                 headerExportedTypes.Enqueue(type);
             return type.Name.Replace("`", "_").Replace("&", "").Replace("[]", " *");
         }

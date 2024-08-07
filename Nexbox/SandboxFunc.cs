@@ -18,7 +18,7 @@ public class SandboxFunc
         Type t = script.GetType();
         FieldInfo f = t.GetField("e", BindingFlags.Instance | BindingFlags.NonPublic);
         if (script is IScriptEngine && f != null)
-            e = (IInterpreter)f.GetValue(script);
+            e = f.GetValue(script) as IInterpreter;
         else
             throw new Exception("Invalid engine!");
     }
@@ -59,6 +59,6 @@ public class SandboxFunc
     {
         if (e != null && e.IsStopped)
             return;
-        a.DynamicInvoke(args.ToList());
+        a.DynamicInvoke(args?.ToList() ?? new List<object>());
     }
 }

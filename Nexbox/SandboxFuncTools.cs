@@ -20,6 +20,8 @@ public static class SandboxFuncTools
 
     public static SandboxFunc TryConvert(object func)
     {
+        if (func is SandboxFunc sfunc)
+            return sfunc;
         return new SandboxFunc().SetAction(func);
         /*
         switch (func)

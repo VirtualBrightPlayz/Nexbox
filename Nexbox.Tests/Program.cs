@@ -7,7 +7,7 @@ const string JSON_STRING = "\'{\"username\": \"joe\"}'";
 
 IInterpreter i;
 Console.WriteLine("Which language would you like to test? (js/lua/riscv)");
-string r = Console.ReadLine() ?? String.Empty;
+string r =  args.Length > 0 ? args[0] : (Console.ReadLine() ?? String.Empty);
 switch (r.ToLower())
 {
     case "lua":
