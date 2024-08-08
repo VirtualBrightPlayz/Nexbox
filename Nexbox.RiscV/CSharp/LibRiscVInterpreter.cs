@@ -93,7 +93,7 @@ static inline {0} {1}({2}) {{
         {
             if (sandbox == null)
             {
-                globalObjs.Add(name, global);
+                globalObjs.Add($"get_{name}", global);
                 Type type = global.GetType();
                 if (type == typeof(void))
                     return;
