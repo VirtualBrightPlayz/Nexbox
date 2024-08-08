@@ -26,10 +26,11 @@ typedef struct {
 ";
 
         public const string HEADER_STRUCT_DEF = @"
-typedef struct {{
+typedef struct {0} {{
 {1}
 }} {0};
 ";
+        public const string HEADER_STRUCT_DEF_FWD = "typedef struct {0} {0};\n";
         public const string HEADER_STRUCT_PROP = "    {0} {1};";
         public const string HEADER_CLASS_DEF = "typedef void* {0};\n";
 
@@ -475,6 +476,8 @@ static inline {0} {1}({2}) {{
             }
 
             List<Type> exported = new List<Type>();
+            Dictionary<Type, string> defs = new Dictionary<Type, string>();
+            Dictionary<Type, List<Type>> deps = new Dictionary<Type, List<Type>>();
             while (headerExportedTypes.Count > 0)
             {
                 Type t = headerExportedTypes.Dequeue();
@@ -483,13 +486,37 @@ static inline {0} {1}({2}) {{
                 exported.Add(t);
                 Type nt = Nullable.GetUnderlyingType(t);
                 if (nt != null)
+                    headerExportedTypes.Enqueue(nt);
+                else if (t.IsArray)
+                    headerExportedTypes.Enqueue(t.GetElementType());
+                else
                 {
-                    if (!nt.IsArray)
-                        sb.Append(ExportHeaderStruct(nt));
-                    continue;
+                    deps.Add(t, new List<Type>());
+                    defs.Add(t, ExportHeaderStruct(t, deps[t]));
                 }
-                if (!t.IsArray)
-                    sb.Append(ExportHeaderStruct(t));
+            }
+            List<Type> forwarded = new List<Type>();
+            foreach (var kvp in deps)
+            {
+                foreach (var type in kvp.Value)
+                {
+                    if (forwarded.Contains(type))
+                        continue;
+                    forwarded.Add(type);
+                    if (type.IsValueType)
+                    {
+                        if (defs.ContainsKey(type))
+                            sb.Append(defs[type]);
+                        // TODO: this shouldn't happen/need to be checked
+                    }
+                    else
+                        sb.Append(string.Format(HEADER_CLASS_DEF, GetCType(type, false)));
+                }
+                if (!forwarded.Contains(kvp.Key))
+                {
+                    forwarded.Add(kvp.Key);
+                    sb.Append(defs[kvp.Key]);
+                }
             }
             sb.Append(body.ToString());
 
@@ -497,7 +524,7 @@ static inline {0} {1}({2}) {{
             return sb.ToString();
         }
 
-        public string ExportHeaderStruct(Type type)
+        public string ExportHeaderStruct(Type type, List<Type> deps)
         {
             if (!type.IsValueType)
                 return string.Format(HEADER_CLASS_DEF, GetCType(type, false));
@@ -505,19 +532,17 @@ static inline {0} {1}({2}) {{
             string[] code = new string[fields.Length];
             for (int i = 0; i < fields.Length; i++)
             {
+                if (!IsBaseCType(fields[i].FieldType))
+                    deps.Add(fields[i].FieldType);
                 code[i] = string.Format(HEADER_STRUCT_PROP, GetCType(fields[i].FieldType, false), fields[i].Name);
             }
-            StringBuilder sb = new StringBuilder();
-            sb.Append(string.Format(HEADER_STRUCT_DEF, GetCType(type, false), string.Join("\n", code)));
-            return sb.ToString();
+            return string.Format(HEADER_STRUCT_DEF, GetCType(type, false), string.Join("\n", code));
         }
 
         public string ExportHeaderGlobal(string name, Type type)
         {
-            StringBuilder sb = new StringBuilder();
             string ret = GetCType(type) + "*";
-            sb.Append(string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})"));
-            return sb.ToString();
+            return string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})");
         }
 
         public string ExportHeaderFunction(string name, MethodBase info, int skip = 0)
@@ -542,14 +567,15 @@ static inline {0} {1}({2}) {{
                 args[0] = string.Format(HEADER_FUNC_ARG_SIG, GetCType(info.DeclaringType), "t");
                 code[0] = string.Format(HEADER_FUNC_TARGET, "t");
             }
-            string ret = GetCType(typeof(void));
+            Type retType = typeof(void);
             if (info.IsConstructor)
-                ret = GetCType(info.DeclaringType);
+                retType = info.DeclaringType;
             else if (info is MethodInfo info2)
-                ret = GetCType(info2.ReturnType);
-            StringBuilder sb = new StringBuilder();
-            sb.Append(string.Format(HEADER_FUNC_RET, ret, name, string.Join(", ", args), string.Join("\n", code), ret == "void" ? "" : $"return ({ret})"));
-            return sb.ToString();
+                retType = info2.ReturnType;
+            string ret = GetCType(retType);
+            if (retType.IsValueType)
+                ret += "*";
+            return string.Format(HEADER_FUNC_RET, ret, name, string.Join(", ", args), string.Join("\n", code), ret == "void" ? "" : $"return ({ret})");
         }
 
         public string GetCType(Type type, bool add = true)
@@ -570,9 +596,34 @@ static inline {0} {1}({2}) {{
                 return "float";
             if (type == typeof(bool))
                 return "char";
-            // if (!headerExportedTypes.Contains(type) /*&& add*/)
-                headerExportedTypes.Enqueue(type);
+            headerExportedTypes.Enqueue(type);
+            Type nt = Nullable.GetUnderlyingType(type);
+            if (nt != null)
+                return GetCType(nt);
+            if (type.IsArray)
+                return GetCType(type.GetElementType()) + "*";
             return type.Name.Replace("`", "_").Replace("&", "").Replace("[]", " *");
+        }
+
+        public bool IsBaseCType(Type type)
+        {
+            if (type == typeof(void))
+                return true;
+            if (type == typeof(string))
+                return true;
+            if (type == typeof(ulong))
+                return true;
+            if (type == typeof(long))
+                return true;
+            if (type == typeof(uint))
+                return true;
+            if (type == typeof(int))
+                return true;
+            if (type == typeof(float))
+                return true;
+            if (type == typeof(bool))
+                return true;
+            return false;
         }
 
         #endregion
