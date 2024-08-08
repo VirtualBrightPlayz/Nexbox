@@ -1,4 +1,5 @@
-﻿using LibRiscV;
+﻿using System.Diagnostics;
+using LibRiscV;
 using Nexbox;
 using Nexbox.Interpreters;
 using Nexbox.Tests;
@@ -50,7 +51,7 @@ switch (i)
         i.RunScript("local data1 = ObjectData() \r\n" +
                     "print(tostring(data1.values['a'])..' '..tostring(data1.values['b'])..' '..tostring(data1.values['c']))", Console.WriteLine);
         i.RunScript("tools().CreateAndExec(SandboxFunc().SetAction(function(x, y) print('Some Event Happened!') end), 'a')", Console.WriteLine);
-        i.RunScript("tools().CreateAndExecLater(SandboxFunc().SetAction(function() print('Bad!') end))", Console.WriteLine);
+        // i.RunScript("tools().CreateAndExecLater(SandboxFunc().SetAction(function() print('Bad!') end))", Console.WriteLine);
         i.RunScript("local data3 = ObjectData(nilctor, 3)\r\nprint(\"b is: \"..tostring(data3.a)..\" and c is \"..tostring(data3.c))", Console.WriteLine);
         i.RunScript("local data4 = ObjectData(8, nilctor)\r\nprint(\"b is: \"..tostring(data4.a)..\" and c is \"..tostring(data4.c))", Console.WriteLine);
         i.RunScript("local data5 = ObjectData(nil, 3)\r\nprint(\"b is: \"..tostring(data5.a)..\" and c is \"..tostring(data5.c))", Console.WriteLine);
@@ -60,6 +61,7 @@ switch (i)
                     "rc.a = \"Hello\"\r\n" +
                     "rc.b = \"World!\"\r\n" +
                     "print(rc.a..\" \"..rc.b)", Console.WriteLine);
+        i.RunScript("tools().SetTick(SandboxFunc().SetAction(function (delta) print(delta) end))");
         break;
     case JavaScriptInterpreter:
         i.RunScript("print(new tools().AddNumbers(one, 10))");
@@ -80,16 +82,25 @@ switch (i)
         i.RunScript("print(data1.values['a'] + ' ' + data1.values['b'] + ' ' + data1.values['c'])");
         i.RunScript("new tools().CreateAndExec(new SandboxFunc(engine).SetAction((x, y) => { print('Some Event Happened!') }), 'a')", Console.WriteLine);
         i.RunScript("new tools().CreateAndExec(() => print('pretty function!'))", Console.WriteLine);
-        i.RunScript("new tools().CreateAndExecLater(new SandboxFunc(engine).SetAction(() => print('Bad!')))", Console.WriteLine);
+        // i.RunScript("new tools().CreateAndExecLater(new SandboxFunc(engine).SetAction(() => print('Bad!')))", Console.WriteLine);
         i.RunScript("let rc = new RandomStruct()\r\n" +
                     "rc.a = \"Hello\"\r\n" +
                     "rc.b = \"World!\"\r\n" +
                     "print(rc.a + \" \" + rc.b)", Console.WriteLine);
+        i.RunScript("tools.SetTick(new SandboxFunc(engine).SetAction((delta) => print(delta)))");
         break;
     case LibRiscVInterpreter rv:
         File.WriteAllText("riscv/api.h", rv.ExportHeader());
         i.RunScript(File.ReadAllText("riscv/test.dat"), Console.WriteLine);
         break;
 }
+/*
+Stopwatch sw = new Stopwatch();
+while (true)
+{
+    TestClass.tick(sw.ElapsedTicks);
+    sw.Restart();
+    Thread.Yield();
+}
+*/
 i.Stop();
-TestClass.exec();

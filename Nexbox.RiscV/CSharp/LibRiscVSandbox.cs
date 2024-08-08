@@ -18,6 +18,18 @@ namespace LibRiscV
         private Queue<byte> stdinCache = new Queue<byte>();
         private GCHandle handle;
         private bool stopped;
+        private static LibRiscVNative.riscv_error_func_t g_stderr;
+        private static LibRiscVNative.riscv_stdin_func_t g_stdin;
+        private static LibRiscVNative.riscv_stdout_func_t g_stdout;
+        private static LibRiscVNative.riscv_syscall_handler_t g_user;
+
+        static LibRiscVSandbox()
+        {
+            g_stderr = ErrCallback;
+            g_stdin = StdInCallback;
+            g_stdout = StdOutCallback;
+            g_user = Syscall_UserFunc;
+        }
 
         private static long StdInCallback(IntPtr opaque, byte *msg, uint size)
         {
@@ -169,9 +181,9 @@ namespace LibRiscV
                 options.max_memory = 1UL << 30; // 1 GiB(?)
                 options.argc = (uint)arr.Length;
                 options.argv = (byte **)dataArr;
-                options.stdin = StdInCallback;
-                options.stdout = StdOutCallback;
-                options.error = ErrCallback;
+                options.stdin = g_stdin;
+                options.stdout = g_stdout;
+                options.error = g_stderr;
                 options.opaque = (void *)(IntPtr)handle;
 
                 fixed (void *data = elf)
@@ -194,7 +206,7 @@ namespace LibRiscV
             // LibRiscVNative.libriscv_set_syscall_handler(64, Syscall_Write);
             // LibRiscVNative.libriscv_set_syscall_handler(93, Syscall_Exit);
             // LibRiscVNative.libriscv_set_syscall_handler(94, Syscall_Exit);
-            LibRiscVNative.libriscv_set_syscall_handler(510, Syscall_UserFunc);
+            LibRiscVNative.libriscv_set_syscall_handler(510, g_user);
         }
 
         public bool Run(out long ret)
@@ -328,11 +340,11 @@ namespace LibRiscV
                 case int i:
                     LibRiscVNative.LIBRISCV_ARG_REGISTER_SET(regs, offset, unchecked((ulong)i));
                     break;
-                case long l:
-                    LibRiscVNative.LIBRISCV_ARG_REGISTER_SET(regs, offset, unchecked((ulong)l));
-                    break;
                 case uint ui:
                     LibRiscVNative.LIBRISCV_ARG_REGISTER_SET(regs, offset, unchecked(ui));
+                    break;
+                case long l:
+                    LibRiscVNative.LIBRISCV_ARG_REGISTER_SET(regs, offset, unchecked((ulong)l));
                     break;
                 case ulong ul:
                     LibRiscVNative.LIBRISCV_ARG_REGISTER_SET(regs, offset, unchecked(ul));

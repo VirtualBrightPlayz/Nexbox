@@ -1,4 +1,5 @@
 #include "api.h"
+#include <stdio.h>
 
 void test() {
     tools_Clear();
@@ -9,10 +10,13 @@ void test() {
     tools_Beep();
 }
 
+void timer(long delta) {
+    printf("%ld\n", delta);
+}
+
 int main() {
-    SandboxFunc func = SandboxFunc_new_1(engine());
-    SandboxFunc_SetAction(func, (Object)test);
-    TestClass cl = tools_new_0();
-    tools_CreateAndExec(cl, func, 0);
+    SandboxFunc func = SandboxFunc_new_1(get_engine());
+    SandboxFunc_SetAction(func, (Object)timer);
+    tools_SetTick(func);
     return 0;
 }

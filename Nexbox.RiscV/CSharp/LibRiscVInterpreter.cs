@@ -176,7 +176,8 @@ static inline {0} {1}({2}) {{
 
         public void CallFunction(object func, object args)
         {
-            Jump((ulong)func, ((List<object>)args).ToArray());
+            object[] arg = ((List<object>)args).ToArray();
+            Jump((ulong)func, arg);
         }
 
         #endregion

@@ -19,6 +19,16 @@ public class TestClass
         }
     }
 
+    public static void SetTick(SandboxFunc f) => execs.Add((f, Array.Empty<object>()));
+
+    internal static void tick(long delta)
+    {
+        foreach ((SandboxFunc, object[]) valueTuple in execs)
+        {
+            SandboxFuncTools.InvokeSandboxFunc(valueTuple.Item1, delta);
+        }
+    }
+
 
     public static int Color
     {
