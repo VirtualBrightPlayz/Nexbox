@@ -226,7 +226,11 @@ static inline {0} {1}({2}) {{
                     for (int i = 0; i < mArgs.Length; i++)
                     {
                         // TODO: add support for arrays
-                        if (!mArgs[i].ParameterType.IsValueType)
+                        if (mArgs[i].ParameterType == typeof(string))
+                        {
+                            argArr[i] = MemGetString(args.args[i]);
+                        }
+                        else if (!mArgs[i].ParameterType.IsValueType)
                         {
                             if (targets.TryGetValue(args.args[i], out var targ))
                             {
@@ -543,7 +547,7 @@ static inline {0} {1}({2}) {{
             else if (info is MethodInfo info2)
                 ret = GetCType(info2.ReturnType);
             StringBuilder sb = new StringBuilder();
-            sb.Append(string.Format(HEADER_FUNC_RET, ret, name, string.Join(",", args), string.Join("\n", code), ret == "void" ? "" : $"return ({ret})"));
+            sb.Append(string.Format(HEADER_FUNC_RET, ret, name, string.Join(", ", args), string.Join("\n", code), ret == "void" ? "" : $"return ({ret})"));
             return sb.ToString();
         }
 

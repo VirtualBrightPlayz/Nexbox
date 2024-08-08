@@ -18,4 +18,16 @@ public class TestClass
             SandboxFuncTools.InvokeSandboxFunc(valueTuple.Item1, valueTuple.Item2);
         }
     }
+
+
+    public static int Color
+    {
+        get => (int)Console.ForegroundColor;
+        set => Console.ForegroundColor = (ConsoleColor)value;
+    }
+    public static void Write(string value) => Console.Write(value);
+    public static void Clear() => Console.Clear();
+    public static void Beep() => Console.Beep();
+    public static void ResetColor() => Console.ResetColor();
+    public static void SetPosition(int left, int top) => Console.SetCursorPosition(left, top);
 }
