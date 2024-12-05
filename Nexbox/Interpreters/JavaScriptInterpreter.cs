@@ -1,10 +1,11 @@
 ﻿using Jint;
+using Jint.Native;
 using Jint.Runtime.Interop;
 using Nexbox.Internals;
 
 namespace Nexbox.Interpreters;
 
-public class JavaScriptInterpreter : IInterpreter
+public class JavaScriptInterpreter : IInterpreter, IInterpreterGlobals
 {
     internal bool stop;
     internal Engine engine;
@@ -55,5 +56,22 @@ public class JavaScriptInterpreter : IInterpreter
             return;
         stop = true;
         engine.Dispose();
+    }
+
+    public string[] GetGlobals()
+    {
+        string[] keys = engine.Global.GetOwnProperties().Where(x => x.Value.Value.Type != Jint.Runtime.Types.Object && x.Value.Value.Type != Jint.Runtime.Types.Undefined).Select(x => x.Key.ToString()).ToArray();
+        return keys;
+    }
+
+    public object GetProperty(string name)
+    {
+        JsValue val = engine.GetValue(name);
+        return val.ToObject();
+    }
+
+    public void SetProperty(string name, object value)
+    {
+        engine.SetValue(name, JsValue.FromObject(engine, value));
     }
 }
