@@ -54,7 +54,7 @@ if (isLua)
 }
 else
 {
-    /*i.RunScript("print(new tools().AddNumbers(one, 10))");
+    i.RunScript("print(new tools().AddNumbers(one, 10))");
     i.RunScript("let data1 = new ObjectData() \r\n" +
                 "let data2 = new ObjectData() \r\n" +
                 "data1.a = 5 \r\n" +
@@ -75,9 +75,7 @@ else
     i.RunScript("let rc = new RandomStruct()\r\n" +
                 "rc.a = \"Hello\"\r\n" +
                 "rc.b = \"World!\"\r\n" +
-                "print(rc.a + \" \" + rc.b)", Console.WriteLine);*/
-    i.RunScript(File.ReadAllText("test.js"), Console.WriteLine);
-    Console.WriteLine(string.Join(",", ((IInterpreterGlobals)i).GetGlobals()));
+                "print(rc.a + \" \" + rc.b)", Console.WriteLine);
 }
 i.Stop();
 // TestClass.exec();

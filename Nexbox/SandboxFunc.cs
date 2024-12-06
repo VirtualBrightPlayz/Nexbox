@@ -28,7 +28,7 @@ public class SandboxFunc
 
     public SandboxFunc SetAction(object func)
     {
-        a = new Action<object>(args =>
+        a = new Func<object, object>(args =>
         {
             foreach (MethodInfo methodInfo in func.GetType().GetMethods())
             {
@@ -36,8 +36,7 @@ public class SandboxFunc
                 {
                     ScriptFunctionDelegate s =
                         LuaInterpreter.ClosureToDelegate((Closure) func);
-                    ((Closure) func).Call(((List<object>) args).ToArray());
-                    break;
+                    return ((Closure) func).Call(((List<object>) args).ToArray());
                 }
                 if (methodInfo.Name.Contains("Invoke"))
                 {
@@ -47,20 +46,20 @@ public class SandboxFunc
                     object[] p = new object[2];
                     p[0] = null;
                     p[1] = vals.ToArray();
-                    methodInfo.Invoke(func, p);
-                    break;
+                    return methodInfo.Invoke(func, p);
                 }
             }
+            return null;
         });
         return this;
     }
 
-    private void Invoke(object[] args)
+    private object Invoke(object[] args)
     {
         if (e != null && e.stop)
-            return;
+            return null;
         if (s != null && s.stop)
-            return;
-        a.DynamicInvoke(args.ToList());
+            return null;
+        return a.DynamicInvoke(args.ToList());
     }
 }

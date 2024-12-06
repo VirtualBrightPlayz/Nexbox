@@ -4,10 +4,13 @@ using Nexbox.Internals;
 
 namespace Nexbox.Interpreters;
 
-public class LuaInterpreter : IInterpreter
+public class LuaInterpreter : IInterpreter, IInterpreterModules
 {
     internal bool stop;
     private Script _script;
+
+    internal readonly Dictionary<string, DynValue> modules = new Dictionary<string, DynValue>();
+
     
     public void StartSandbox(Action<object> print)
     {
@@ -16,9 +19,19 @@ public class LuaInterpreter : IInterpreter
         _script = new Script(CoreModules.Preset_SoftSandbox);
         _script.Options.DebugPrint = print;
         UserData.RegisterType(typeof(SandboxFunc), InteropAccessMode.BackgroundOptimized);
+        _script.Globals["require"] = new Func<string, DynValue>(Require);
         _script.Globals["SandboxFunc"] = new Func<object>(() => new SandboxFunc(new LuaEngine(this)));
         UserData.RegisterType(typeof(LuaNullConstructor), InteropAccessMode.BackgroundOptimized);
         _script.Globals["nilctor"] = new LuaNullConstructor();
+    }
+
+    public DynValue Require(string name)
+    {
+        if (stop)
+            return null;
+        if (modules.TryGetValue(name, out DynValue val))
+            return val;
+        return null;
     }
 
     public void CreateGlobal(string name, object global)
@@ -135,4 +148,60 @@ public class LuaInterpreter : IInterpreter
     }
 
     internal static ScriptFunctionDelegate ClosureToDelegate(Closure c) => c.GetDelegate();
+
+    public void RunModule(string module, string script, Action<Exception> OnException = null)
+    {
+        if (stop)
+            return;
+
+        try
+        {
+            modules[module] = _script.DoString(script, codeFriendlyName: module);
+        }
+        catch(Exception e){ OnException?.Invoke(e); }
+    }
+
+    public string[] GetModuleGlobals(string module)
+    {
+        if (stop)
+            return Array.Empty<string>();
+        if (modules.TryGetValue(module, out DynValue instance) && instance.Type == DataType.Table)
+        {
+            return instance.Table.Keys.Select(x => x.String).ToArray();
+        }
+        return Array.Empty<string>();
+    }
+
+    public object GetModuleProperty(string module, string name)
+    {
+        if (stop)
+            return null;
+        if (modules.TryGetValue(module, out DynValue instance) && instance.Type == DataType.Table)
+        {
+            return instance.Table[name];
+        }
+        return null;
+    }
+
+    public void SetModuleProperty(string module, string name, object value)
+    {
+        if (stop)
+            return;
+        if (modules.TryGetValue(module, out DynValue instance) && instance.Type == DataType.Table)
+        {
+            instance.Table[name] = DynValue.FromObject(_script, value);
+        }
+    }
+
+    public object RunModuleFunction(string module, string name, params object[] args)
+    {
+        if (stop)
+            return null;
+        if (modules.TryGetValue(module, out DynValue instance) && instance.Type == DataType.Table)
+        {
+            SandboxFunc func = SandboxFuncTools.TryConvert(instance.Table[name]);
+            return SandboxFuncTools.InvokeSandboxFunc(func, args);
+        }
+        return null;
+    }
 }
