@@ -11,17 +11,17 @@ static inline long syscall(long n, long arg0, long arg1) {
     return a0;
 }
 
-static inline long psyscall(long n, const void *arg0, const void *arg1) {
+static inline void* psyscall(long n, const void *arg0, const void *arg1) {
     asm("" ::: "memory");
-    return syscall(n, (long long)arg0, (long long)arg1);
+    return (void*)syscall(n, (long long)arg0, (long long)arg1);
 }
 
 static inline long usercall(const char *func, long arg) {
-    return psyscall(USER_SYSCALL, (const void *)func, (const void *)arg);
+    return (long)syscall(USER_SYSCALL, (long)func, (long)arg);
 }
 
-static inline long pusercall(const char *func, const void *arg) {
-    return psyscall(USER_SYSCALL, (const void *)func, (const void *)arg);
+static inline void* pusercall(const char *func, const void *arg) {
+    return (void *)psyscall(USER_SYSCALL, (const void *)func, (const void *)arg);
 }
 
 #endif

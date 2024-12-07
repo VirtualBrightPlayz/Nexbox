@@ -15,6 +15,7 @@ namespace LibRiscV
 #ifndef APICALL_H
 #define APICALL_H
 
+#include ""macrolib.h""
 #include ""syscall.h""
 
 #define PUBLIC __attribute__((used, retain))
@@ -32,7 +33,11 @@ typedef struct {0} {{
 ";
         public const string HEADER_STRUCT_DEF_FWD = "typedef struct {0} {0};\n";
         public const string HEADER_STRUCT_PROP = "    {0} {1};";
-        public const string HEADER_CLASS_DEF = "typedef void* {0};\n";
+        // public const string HEADER_CLASS_DEF = "typedef void* {0};\n";
+        public const string HEADER_CLASS_DEF = "API_OBJECT_BEGIN({0})\n";
+        public const string HEADER_CLASS_DEF_STATIC_FUNC = "API_METHOD_RET_{0}({1}, {2}, {3})\n";
+        public const string HEADER_CLASS_DEF_FUNC = "API_OBJECT_METHOD_RET_{0}({1}, {2}, {3})\n";
+        public const string HEADER_CLASS_DEF_END = "API_OBJECT_END()\n";
 
         public const string HEADER_FUNC_RET = @"
 static inline {0} {1}({2}) {{
@@ -510,7 +515,10 @@ static inline {0} {1}({2}) {{
                         // TODO: this shouldn't happen/need to be checked
                     }
                     else
-                        sb.Append(string.Format(HEADER_CLASS_DEF, GetCType(type, false)));
+                    {
+                        sb.Append(ExportHeaderStruct(type, new List<Type>()));
+                        // sb.Append(string.Format(HEADER_CLASS_DEF, GetCType(type, false)));
+                    }
                 }
                 if (!forwarded.Contains(kvp.Key))
                 {
@@ -524,10 +532,35 @@ static inline {0} {1}({2}) {{
             return sb.ToString();
         }
 
+        public string ExportHeaderClass(Type type)
+        {
+            StringBuilder sb2 = new StringBuilder();
+            string typename = GetCType(type, false);
+            sb2.Append(string.Format(HEADER_CLASS_DEF, typename));
+            foreach (var method in methods)
+            {
+                if (method.Value.DeclaringType == type && method.Value is MethodInfo info)
+                {
+                    ParameterInfo[] margs = method.Value.GetParameters();
+                    string[] nameAndArgs = new string[margs.Length + 1];
+                    nameAndArgs[0] = method.Value.Name;
+                    for (int i = 0; i < margs.Length; i++)
+                    {
+                        nameAndArgs[i+1] = string.Format("{0}, {1}", GetCType(margs[i].ParameterType, false), margs[i].Name);
+                    }
+                    sb2.Append(string.Format(info.IsStatic ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FUNC, margs.Length, typename, GetCType(info.ReturnType, false), string.Join(", ", nameAndArgs)));
+                }
+            }
+            sb2.Append(HEADER_CLASS_DEF_END);
+            return sb2.ToString();
+        }
+
         public string ExportHeaderStruct(Type type, List<Type> deps)
         {
             if (!type.IsValueType)
-                return string.Format(HEADER_CLASS_DEF, GetCType(type, false));
+            {
+                return ExportHeaderClass(type);
+            }
             FieldInfo[] fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
             string[] code = new string[fields.Length];
             for (int i = 0; i < fields.Length; i++)
@@ -602,7 +635,14 @@ static inline {0} {1}({2}) {{
                 return GetCType(nt);
             if (type.IsArray)
                 return GetCType(type.GetElementType()) + "*";
-            return type.Name.Replace("`", "_").Replace("&", "").Replace("[]", " *");
+            foreach (var mod in modules)
+            {
+                if (mod.Value == type)
+                {
+                    return mod.Key.Replace("`", "_").Replace("&", "").Replace("[]", "*");
+                }
+            }
+            return type.Name.Replace("`", "_").Replace("&", "").Replace("[]", "*");
         }
 
         public bool IsBaseCType(Type type)

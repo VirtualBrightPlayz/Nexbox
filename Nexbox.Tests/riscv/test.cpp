@@ -1,12 +1,6 @@
-#include "macrolib.h"
 #include "api.h"
 #include <stdio.h>
 #include <stdarg.h>
-
-API_OBJECT_BEGIN(thing)
-API_OBJECT_METHOD_RET_V(thing, void*, test2, 1, h)
-API_METHOD_RET_V(thing_ptr, thing_new_1, 0)
-API_OBJECT_END()
 
 void test() {
     tools_Clear();
@@ -16,6 +10,8 @@ void test() {
 }
 
 void timer(long delta) {
+    ObjectData t = ObjectData((void*)0);
+    t.set_a(0);
     printf("%ld\n", delta);
 }
 
