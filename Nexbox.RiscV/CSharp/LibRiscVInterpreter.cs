@@ -33,11 +33,10 @@ typedef struct {0} {{
 ";
         public const string HEADER_STRUCT_DEF_FWD = "typedef struct {0} {0};\n";
         public const string HEADER_STRUCT_PROP = "    {0} {1};";
-        // public const string HEADER_CLASS_DEF = "typedef void* {0};\n";
         public const string HEADER_CLASS_DEF = "API_OBJECT_BEGIN({0})\n";
         public const string HEADER_CLASS_DEF_STATIC_FUNC = "API_METHOD_RET_{0}({1}, {2}, {3})\n";
         public const string HEADER_CLASS_DEF_FUNC = "API_OBJECT_METHOD_RET_{0}({1}, {2}, {3})\n";
-        public const string HEADER_CLASS_DEF_END = "API_OBJECT_END()\n";
+        public const string HEADER_CLASS_DEF_END = "API_OBJECT_END()\n\n";
 
         public const string HEADER_FUNC_RET = @"
 static inline {0} {1}({2}) {{
@@ -473,11 +472,13 @@ static inline {0} {1}({2}) {{
             }
             foreach (var kvp in delegates)
             {
-                body.Append(ExportHeaderFunction(kvp.Key, kvp.Value.Method, 1));
+                ExportHeaderFunction(kvp.Key, kvp.Value.Method, 1);
+                // body.Append(ExportHeaderFunction(kvp.Key, kvp.Value.Method, 1));
             }
             foreach (var kvp in methods)
             {
-                body.Append(ExportHeaderFunction(kvp.Key, kvp.Value));
+                ExportHeaderFunction(kvp.Key, kvp.Value);
+                // body.Append(ExportHeaderFunction(kvp.Key, kvp.Value));
             }
 
             List<Type> exported = new List<Type>();
@@ -517,7 +518,6 @@ static inline {0} {1}({2}) {{
                     else
                     {
                         sb.Append(ExportHeaderStruct(type, new List<Type>()));
-                        // sb.Append(string.Format(HEADER_CLASS_DEF, GetCType(type, false)));
                     }
                 }
                 if (!forwarded.Contains(kvp.Key))
@@ -539,16 +539,42 @@ static inline {0} {1}({2}) {{
             sb2.Append(string.Format(HEADER_CLASS_DEF, typename));
             foreach (var method in methods)
             {
-                if (method.Value.DeclaringType == type && method.Value is MethodInfo info)
+                if (method.Value.DeclaringType == type)
                 {
-                    ParameterInfo[] margs = method.Value.GetParameters();
-                    string[] nameAndArgs = new string[margs.Length + 1];
-                    nameAndArgs[0] = method.Value.Name;
-                    for (int i = 0; i < margs.Length; i++)
+                    if (method.Value is MethodInfo info)
                     {
-                        nameAndArgs[i+1] = string.Format("{0}, {1}", GetCType(margs[i].ParameterType, false), margs[i].Name);
+                        ParameterInfo[] margs = method.Value.GetParameters();
+                        string[] nameAndArgs = new string[margs.Length + 1];
+                        nameAndArgs[0] = method.Value.Name;
+                        for (int i = 0; i < margs.Length; i++)
+                        {
+                            string fmt = "{0}, _{1}";
+                            if (IsCValueType(margs[i].ParameterType))
+                                fmt = "{0}*, _{1}";
+                            nameAndArgs[i+1] = string.Format(fmt, GetCType(margs[i].ParameterType, false), margs[i].Name);
+                        }
+                        string ret = GetCType(info.ReturnType, false);
+                        if (IsCValueType(info.ReturnType))
+                            ret += "*";
+                        sb2.Append(string.Format(info.IsStatic ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs)));
                     }
-                    sb2.Append(string.Format(info.IsStatic ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FUNC, margs.Length, typename, GetCType(info.ReturnType, false), string.Join(", ", nameAndArgs)));
+                    else if (method.Value is ConstructorInfo ctorInfo && !ctorInfo.IsStatic)
+                    {
+                        ParameterInfo[] margs = method.Value.GetParameters();
+                        string[] nameAndArgs = new string[margs.Length + 1];
+                        nameAndArgs[0] = "new_" + margs.Length;
+                        for (int i = 0; i < margs.Length; i++)
+                        {
+                            string fmt = "{0}, _{1}";
+                            if (margs[i].ParameterType.IsValueType)
+                                fmt = "{0}*, _{1}";
+                            nameAndArgs[i+1] = string.Format(fmt, GetCType(margs[i].ParameterType, false), margs[i].Name);
+                        }
+                        string ret = GetCType(ctorInfo.DeclaringType, false);
+                        if (ctorInfo.DeclaringType.IsValueType)
+                            ret += "*";
+                        sb2.Append(string.Format(HEADER_CLASS_DEF_STATIC_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs)));
+                    }
                 }
             }
             sb2.Append(HEADER_CLASS_DEF_END);
@@ -664,6 +690,27 @@ static inline {0} {1}({2}) {{
             if (type == typeof(bool))
                 return true;
             return false;
+        }
+
+        public bool IsCValueType(Type type)
+        {
+            if (type == typeof(void))
+                return false;
+            if (type == typeof(string))
+                return false;
+            if (type == typeof(ulong))
+                return false;
+            if (type == typeof(long))
+                return false;
+            if (type == typeof(uint))
+                return false;
+            if (type == typeof(int))
+                return false;
+            if (type == typeof(float))
+                return false;
+            if (type == typeof(bool))
+                return false;
+            return type.IsValueType;
         }
 
         #endregion

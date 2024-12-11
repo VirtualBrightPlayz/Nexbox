@@ -3,22 +3,20 @@
 #include <stdarg.h>
 
 void test() {
-    tools_Clear();
-    tools_set_Color(12);
-    tools_Write("hi\n");
-    tools_ResetColor();
+    tools::Clear();
+    tools::set_Color(12);
+    tools::Write("hi\n");
+    tools::ResetColor();
 }
 
 void timer(long delta) {
-    ObjectData t = ObjectData((void*)0);
-    t.set_a(0);
     printf("%ld\n", delta);
 }
 
 int main() {
     test();
-    SandboxFunc func = SandboxFunc_new_1(get_engine());
-    SandboxFunc_SetAction(func, (Object)timer);
-    tools_SetTick(func);
+    SandboxFunc func = SandboxFunc::new_1(get_engine());
+    func.SetAction((void*)timer);
+    tools::SetTick(func);
     return 0;
 }
