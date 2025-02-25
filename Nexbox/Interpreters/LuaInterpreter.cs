@@ -4,7 +4,7 @@ using Nexbox.Internals;
 
 namespace Nexbox.Interpreters;
 
-public class LuaInterpreter : IInterpreter, IInterpreterModules
+public class LuaInterpreter : IInterpreter, IInterpreterGlobals, IInterpreterModules
 {
     internal bool stop;
     private Script _script;
@@ -148,6 +148,27 @@ public class LuaInterpreter : IInterpreter, IInterpreterModules
     }
 
     internal static ScriptFunctionDelegate ClosureToDelegate(Closure c) => c.GetDelegate();
+
+    public string[] GetGlobals()
+    {
+        if (stop)
+            return Array.Empty<string>();
+        return _script.Globals.Keys.Where(x => x.Type == DataType.String).Select(x => x.String).ToArray();
+    }
+
+    public object GetProperty(string name)
+    {
+        if (stop)
+            return null;
+        return _script.Globals[name];
+    }
+
+    public void SetProperty(string name, object value)
+    {
+        if (stop)
+            return;
+        _script.Globals[name] = DynValue.FromObject(_script, value);
+    }
 
     public void RunModule(string module, string script, Action<Exception> OnException = null)
     {

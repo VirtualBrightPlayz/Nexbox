@@ -22,6 +22,20 @@ i.ForwardType("ObjectData", typeof(ObjectData));
 i.ForwardType("SomeEnum", typeof(SomeEnum));
 i.ForwardType("StaticExample", typeof(StaticExample));
 i.ForwardType("RandomStruct", typeof(RandomStruct));
+if (i is IInterpreterGlobals gbls && i is IInterpreterModules mdls)
+{
+    switch (i)
+    {
+        case JavaScriptInterpreter:
+            mdls.RunModule("lib", File.ReadAllText("lib.js"), Console.WriteLine);
+            mdls.RunModule("main", File.ReadAllText("main.js"), Console.WriteLine);
+            break;
+        case LuaInterpreter:
+            mdls.RunModule("lib", File.ReadAllText("lib.lua"), Console.WriteLine);
+            mdls.RunModule("main", File.ReadAllText("main.lua"), Console.WriteLine);
+            break;
+    }
+}
 if (isLua)
 {
     i.RunScript("print(tools().AddNumbers(one, 10))");
