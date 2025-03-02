@@ -14,17 +14,27 @@ public class JavaScriptInterpreter : IInterpreter, IInterpreterGlobals, IInterpr
     [ThreadStatic]
     internal static Engine activeEngine;
 
-    internal readonly Dictionary<string, ObjectInstance> modules = new Dictionary<string, ObjectInstance>();
+    internal readonly Dictionary<string, ObjectInstance> moduleInsts = new Dictionary<string, ObjectInstance>();
 
     public void StartSandbox(Action<object> print)
     {
         if (stop || engine != null)
             return;
-        modules.Clear();
+        moduleInsts.Clear();
         engine = new Engine();
         engine.SetValue("print", print);
+        engine.SetValue("require", Require);
         CreateGlobal("engine", new JsEngine(this));
         ForwardType("SandboxFunc", typeof(SandboxFunc));
+    }
+
+    public JsValue Require(string name)
+    {
+        if (moduleInsts.TryGetValue(name, out var val))
+        {
+            return val;
+        }
+        return JsValue.Null;
     }
 
     public void CreateGlobal(string name, object global)
@@ -95,7 +105,7 @@ public class JavaScriptInterpreter : IInterpreter, IInterpreterGlobals, IInterpr
         try
         {
             engine.Modules.Add(module, script);
-            modules[module] = engine.Modules.Import(module);
+            moduleInsts[module] = engine.Modules.Import(module);
         }
         catch(Exception e){ OnException?.Invoke(e); }
         activeEngine = null;
@@ -105,7 +115,7 @@ public class JavaScriptInterpreter : IInterpreter, IInterpreterGlobals, IInterpr
     {
         if (stop)
             return Array.Empty<string>();
-        if (modules.TryGetValue(module, out ObjectInstance instance))
+        if (moduleInsts.TryGetValue(module, out ObjectInstance instance))
         {
             return instance.GetOwnPropertyKeys(Jint.Runtime.Types.String).Select(x => x.ToString()).ToArray();
         }
@@ -116,7 +126,7 @@ public class JavaScriptInterpreter : IInterpreter, IInterpreterGlobals, IInterpr
     {
         if (stop)
             return null;
-        if (modules.TryGetValue(module, out ObjectInstance instance))
+        if (moduleInsts.TryGetValue(module, out ObjectInstance instance))
         {
             return instance[name].ToObject();
         }
@@ -127,7 +137,7 @@ public class JavaScriptInterpreter : IInterpreter, IInterpreterGlobals, IInterpr
     {
         if (stop)
             return;
-        if (modules.TryGetValue(module, out ObjectInstance instance))
+        if (moduleInsts.TryGetValue(module, out ObjectInstance instance))
         {
             instance[name] = JsValue.FromObject(engine, value);
         }
@@ -137,7 +147,7 @@ public class JavaScriptInterpreter : IInterpreter, IInterpreterGlobals, IInterpr
     {
         if (stop)
             return null;
-        if (modules.TryGetValue(module, out ObjectInstance instance))
+        if (moduleInsts.TryGetValue(module, out ObjectInstance instance))
         {
             activeEngine = engine;
             SandboxFunc func = SandboxFuncTools.TryConvert(instance[name]);

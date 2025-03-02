@@ -28,11 +28,11 @@ if (i is IInterpreterGlobals gbls && i is IInterpreterModules mdls)
     {
         case JavaScriptInterpreter:
             mdls.RunModule("lib", File.ReadAllText("lib.js"), Console.WriteLine);
-            mdls.RunModule("main", File.ReadAllText("main.js"), Console.WriteLine);
+            i.RunScript(File.ReadAllText("main.js"), Console.WriteLine);
             break;
         case LuaInterpreter:
             mdls.RunModule("lib", File.ReadAllText("lib.lua"), Console.WriteLine);
-            mdls.RunModule("main", File.ReadAllText("main.lua"), Console.WriteLine);
+            i.RunScript(File.ReadAllText("main.lua"), Console.WriteLine);
             break;
     }
 }
