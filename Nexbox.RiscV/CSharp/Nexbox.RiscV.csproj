@@ -8,7 +8,12 @@
     <ItemGroup>
       <ProjectReference Include="..\..\Nexbox\Nexbox.csproj" />
     </ItemGroup>
-    <ItemGroup>
+    <ItemGroup Condition="Exists('..\C\build\riscv_capi.dll')">
+      <Content Include="..\C\build\riscv_capi.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+    <ItemGroup Condition="Exists('..\C\build\libriscv_capi.so')">
       <Content Include="..\C\build\libriscv_capi.so">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
