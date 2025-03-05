@@ -5,7 +5,9 @@
 
 #ifdef __cplusplus
 
-#define API_OBJECT_BEGIN(name) typedef void* name##_ptr; struct name { \
+#define API_OBJECT_DECLARE(name) typedef void* name##_ptr; struct name;
+
+#define API_OBJECT_BEGIN(name) struct name { \
     name##_ptr addr; \
     name(void* ptr) { \
         this->addr = (name##_ptr)ptr; \
@@ -91,6 +93,8 @@ inline ret name(type1 name1, type2 name2, type3 name3, type4 name4) { \
 }
 
 #else
+
+#define API_OBJECT_DECLARE(name) typedef void* name;
 
 #define API_OBJECT_BEGIN(name) typedef void* name;
 #define API_OBJECT_END()

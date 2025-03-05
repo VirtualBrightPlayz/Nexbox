@@ -33,6 +33,7 @@ typedef struct {0} {{
 ";
         public const string HEADER_STRUCT_DEF_FWD = "typedef struct {0} {0};\n";
         public const string HEADER_STRUCT_PROP = "    {0} {1};";
+        public const string HEADER_CLASS_DEF_FWD = "API_OBJECT_DECLARE({0})\n";
         public const string HEADER_CLASS_DEF = "API_OBJECT_BEGIN({0})\n";
         public const string HEADER_CLASS_DEF_STATIC_FUNC = "API_METHOD_RET_{0}({1}, {2}, {3})\n";
         public const string HEADER_CLASS_DEF_FUNC = "API_OBJECT_METHOD_RET_{0}({1}, {2}, {3})\n";
@@ -89,7 +90,7 @@ static inline {0} {1}({2}) {{
             delegates = new Dictionary<string, Delegate>();
             methods = new Dictionary<string, MethodBase>();
             targets = new Dictionary<ulong, object>();
-            targetIdCounter = 1; // start at 1, we don't want null to equal something
+            targetIdCounter = 1_000_000; // start at 1, we don't want null to equal something
             CreateGlobal("engine", new LibRiscVEngine(this));
             ForwardType("SandboxFunc", typeof(SandboxFunc));
         }
@@ -338,13 +339,6 @@ static inline {0} {1}({2}) {{
             return sandbox.MemString(vaddr);
         }
 
-        public float MemGetFloat(ulong vaddr)
-        {
-            if (sandbox == null)
-                return default;
-            return sandbox.MemFloat(vaddr);
-        }
-
         public T MemGetObject<T>(ulong vaddr) where T : unmanaged
         {
             if (sandbox == null)
@@ -359,6 +353,13 @@ static inline {0} {1}({2}) {{
                 return IntPtr.Zero;
             IntPtr ptr = sandbox.MemObject(vaddr, size);
             return ptr;
+        }
+
+        public unsafe ulong MemGetPtr(ulong vaddr)
+        {
+            IntPtr ptr = sandbox.MemObject(vaddr, sizeof(ulong));
+            ReadOnlySpan<byte> span = new ReadOnlySpan<byte>(ptr.ToPointer(), sizeof(ulong));
+            return BitConverter.ToUInt64(span.ToArray(), 0);
         }
 
         public unsafe object MemGetObjectFromType(ulong vaddr, Type type)
@@ -486,6 +487,7 @@ static inline {0} {1}({2}) {{
             List<Type> exported = new List<Type>();
             Dictionary<Type, string> defs = new Dictionary<Type, string>();
             Dictionary<Type, List<Type>> deps = new Dictionary<Type, List<Type>>();
+            Dictionary<Type, int> depsCount = new Dictionary<Type, int>();
             while (headerExportedTypes.Count > 0)
             {
                 Type t = headerExportedTypes.Dequeue();
@@ -501,60 +503,82 @@ static inline {0} {1}({2}) {{
                     exported.Add(t);
                     deps.Add(t, new List<Type>());
                     defs.Add(t, ExportHeaderStruct(t, deps[t]));
+                    depsCount.Add(t, GetAllDepends(t).Count);
                 }
             }
             List<Type> forwarded = new List<Type>();
-            foreach (var kvp in deps)
+            StringBuilder decls = new StringBuilder();
+            StringBuilder impls = new StringBuilder();
+            foreach (var kvp in depsCount.OrderBy(x => x.Value))
             {
-                List<Type> toBeChecked = new List<Type>();
-                toBeChecked.Add(kvp.Key);
-                Stack<KeyValuePair<Type, string>> checkedStack = new Stack<KeyValuePair<Type, string>>();
-                /*foreach (var type in kvp.Value)
-                {
-                    Type nt = Nullable.GetUnderlyingType(type);
-                    if (nt != null)
-                        toBeChecked.Insert(0, nt);
-                    else if (type.IsArray)
-                        toBeChecked.Insert(0, type.GetElementType());
-                    else
-                        ExportHeaderStruct(type, toBeChecked);
-                }*/
-                List<Type> hasBeenChecked = new List<Type>();
-                while (toBeChecked.Count > 0)
-                {
-                    Type type = toBeChecked[toBeChecked.Count - 1];
-                    toBeChecked.RemoveAt(toBeChecked.Count - 1);
-                    if (hasBeenChecked.Contains(type))
-                        continue;
-                    hasBeenChecked.Add(type);
-                    Type nt = Nullable.GetUnderlyingType(type);
-                    if (nt != null)
-                        toBeChecked.Add(nt);
-                    else if (type.IsArray)
-                        toBeChecked.Add(type.GetElementType());
-                    else
-                        checkedStack.Push(new KeyValuePair<Type, string>(type, ExportHeaderStruct(type, toBeChecked)));
-                }
-
-                while (checkedStack.Count > 0)
-                {
-                    var val = checkedStack.Pop();
-                    if (forwarded.Contains(val.Key))
-                        continue;
-                    forwarded.Add(val.Key);
-                    sb.Append(val.Value);
-                }
-
                 if (!forwarded.Contains(kvp.Key) && !kvp.Key.IsArray)
                 {
                     forwarded.Add(kvp.Key);
-                    sb.Append(ExportHeaderStruct(kvp.Key, kvp.Value));
+                    if (kvp.Key.IsValueType)
+                        decls.Append(string.Format(HEADER_STRUCT_DEF_FWD, GetCType(kvp.Key, false)));
+                    else
+                        decls.Append(string.Format(HEADER_CLASS_DEF_FWD, GetCType(kvp.Key, false)));
+                    impls.Append(ExportHeaderStruct(kvp.Key, new List<Type>()));
                 }
             }
+            sb.Append(decls.ToString());
+            sb.Append(impls.ToString());
             sb.Append(body.ToString());
 
             sb.Append(HEADER_END);
             return sb.ToString();
+        }
+
+        public Dictionary<Type, int> GetAllDepends(Type type)
+        {
+            Dictionary<Type, int> deps = new Dictionary<Type, int>();
+            Queue<Type> toBeChecked = new Queue<Type>();
+            toBeChecked.Enqueue(type);
+            while (toBeChecked.Count > 0)
+            {
+                Type checkType = toBeChecked.Dequeue();
+                if (deps.ContainsKey(checkType))
+                    continue;
+                List<Type> types = GetDirectDepends(checkType);
+                deps.Add(checkType, types.Count);
+                foreach (var t in types)
+                    toBeChecked.Enqueue(t);
+            }
+            return deps;
+        }
+
+        public List<Type> GetDirectDepends(Type type)
+        {
+            List<Type> deps = new List<Type>();
+            foreach (var method in methods)
+            {
+                if (method.Value.DeclaringType == type)
+                {
+                    if (method.Value is MethodInfo info)
+                    {
+                        ParameterInfo[] margs = method.Value.GetParameters();
+                        for (int i = 0; i < margs.Length; i++)
+                        {
+                            if (!IsBaseCType(margs[i].ParameterType))
+                                deps.Add(margs[i].ParameterType);
+                        }
+                        if (!IsBaseCType(info.ReturnType))
+                            deps.Add(info.ReturnType);
+                    }
+                    else if (method.Value is ConstructorInfo ctorInfo && !ctorInfo.IsStatic)
+                    {
+                        ParameterInfo[] margs = method.Value.GetParameters();
+                        for (int i = 0; i < margs.Length; i++)
+                        {
+                            if (!IsBaseCType(margs[i].ParameterType))
+                                deps.Add(margs[i].ParameterType);
+                        }
+                        if (!IsBaseCType(ctorInfo.DeclaringType))
+                            deps.Add(ctorInfo.DeclaringType);
+                    }
+                }
+            }
+            return deps;
         }
 
         public string ExportHeaderClass(Type type, List<Type> deps)
@@ -576,14 +600,14 @@ static inline {0} {1}({2}) {{
                             if (!IsBaseCType(margs[i].ParameterType))
                                 deps.Add(margs[i].ParameterType);
                             string fmt = "{0}, _{1}";
-                            if (IsCValueType(margs[i].ParameterType))
+                            if (!IsCValueType(margs[i].ParameterType))
                                 fmt = "{0}*, _{1}";
                             nameAndArgs[i+1] = string.Format(fmt, GetCType(margs[i].ParameterType, false), margs[i].Name);
                         }
                         if (!IsBaseCType(info.ReturnType))
                             deps.Add(info.ReturnType);
                         string ret = GetCType(info.ReturnType, false);
-                        if (IsCValueType(info.ReturnType))
+                        if (!IsCValueType(info.ReturnType))
                             ret += "*";
                         sb2.Append(string.Format(info.IsStatic ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs)));
                     }
@@ -635,8 +659,9 @@ static inline {0} {1}({2}) {{
 
         public string ExportHeaderGlobal(string name, Type type)
         {
-            string ret = GetCType(type) + "*";
-            return string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})");
+            string ret = GetCType(type);
+            return string.Format(HEADER_FUNC_RET, ret, name, "", "", "return ");
+            // return string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})");
         }
 
         public string ExportHeaderFunction(string name, MethodBase info, int skip = 0)
@@ -687,7 +712,7 @@ static inline {0} {1}({2}) {{
             if (type == typeof(int))
                 return "int";
             if (type == typeof(float))
-                return "float";
+                return "float*";
             if (type == typeof(bool))
                 return "char";
             headerExportedTypes.Enqueue(type);
@@ -729,6 +754,9 @@ static inline {0} {1}({2}) {{
 
         public bool IsCValueType(Type type)
         {
+            if (IsBaseCType(type))
+                return true;
+            /*
             if (type == typeof(void))
                 return false;
             if (type == typeof(string))
@@ -742,10 +770,11 @@ static inline {0} {1}({2}) {{
             if (type == typeof(int))
                 return false;
             if (type == typeof(float))
-                return true; // note.
+                return false; // note.
             if (type == typeof(bool))
                 return false;
-            return type.IsValueType;
+            */
+            return false;//type.IsValueType;
         }
 
         #endregion
