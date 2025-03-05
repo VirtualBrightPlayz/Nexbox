@@ -116,18 +116,20 @@ static inline {0} {1}({2}) {{
                     return;
                 if (type == typeof(bool))
                     return;
-                foreach (var info in type.GetMethods(BindingFlags.Instance | BindingFlags.Public))
+                /*foreach (var info in type.GetMethods(BindingFlags.Instance | BindingFlags.Public))
                 {
                     string n = $"g_{name}_{info.Name}";
                     if (info.DeclaringType == type && !methods.ContainsKey(n))
                         methods.Add(n, info);
-                }
-                foreach (var info in type.GetConstructors(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public))
+                }*/
+                /*
+                foreach (var info in type.GetConstructors(BindingFlags.Public | BindingFlags.Instance))
                 {
                     string n = $"g_{name}_new_{info.GetParameters().Length}";
                     if (info.DeclaringType == type && !methods.ContainsKey(n))
                         methods.Add(n, info);
                 }
+                */
             }
         }
 
@@ -142,7 +144,7 @@ static inline {0} {1}({2}) {{
                     if (info.DeclaringType == type && !methods.ContainsKey(n))
                         methods.Add(n, info);
                 }
-                foreach (var info in type.GetConstructors(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public))
+                foreach (var info in type.GetConstructors(BindingFlags.Public | BindingFlags.Instance))
                 {
                     string n = $"{module}_new_{info.GetParameters().Length}";
                     if (info.DeclaringType == type && !methods.ContainsKey(n))
@@ -489,7 +491,6 @@ static inline {0} {1}({2}) {{
                 Type t = headerExportedTypes.Dequeue();
                 if (exported.Contains(t))
                     continue;
-                exported.Add(t);
                 Type nt = Nullable.GetUnderlyingType(t);
                 if (nt != null)
                     headerExportedTypes.Enqueue(nt);
@@ -497,6 +498,7 @@ static inline {0} {1}({2}) {{
                     headerExportedTypes.Enqueue(t.GetElementType());
                 else
                 {
+                    exported.Add(t);
                     deps.Add(t, new List<Type>());
                     defs.Add(t, ExportHeaderStruct(t, deps[t]));
                 }
@@ -504,26 +506,49 @@ static inline {0} {1}({2}) {{
             List<Type> forwarded = new List<Type>();
             foreach (var kvp in deps)
             {
-                foreach (var type in kvp.Value)
+                List<Type> toBeChecked = new List<Type>();
+                toBeChecked.Add(kvp.Key);
+                Stack<KeyValuePair<Type, string>> checkedStack = new Stack<KeyValuePair<Type, string>>();
+                /*foreach (var type in kvp.Value)
                 {
-                    if (forwarded.Contains(type))
-                        continue;
-                    forwarded.Add(type);
-                    if (type.IsValueType)
-                    {
-                        if (defs.ContainsKey(type))
-                            sb.Append(defs[type]);
-                        // TODO: this shouldn't happen/need to be checked
-                    }
+                    Type nt = Nullable.GetUnderlyingType(type);
+                    if (nt != null)
+                        toBeChecked.Insert(0, nt);
+                    else if (type.IsArray)
+                        toBeChecked.Insert(0, type.GetElementType());
                     else
-                    {
-                        sb.Append(ExportHeaderStruct(type, new List<Type>()));
-                    }
+                        ExportHeaderStruct(type, toBeChecked);
+                }*/
+                List<Type> hasBeenChecked = new List<Type>();
+                while (toBeChecked.Count > 0)
+                {
+                    Type type = toBeChecked[toBeChecked.Count - 1];
+                    toBeChecked.RemoveAt(toBeChecked.Count - 1);
+                    if (hasBeenChecked.Contains(type))
+                        continue;
+                    hasBeenChecked.Add(type);
+                    Type nt = Nullable.GetUnderlyingType(type);
+                    if (nt != null)
+                        toBeChecked.Add(nt);
+                    else if (type.IsArray)
+                        toBeChecked.Add(type.GetElementType());
+                    else
+                        checkedStack.Push(new KeyValuePair<Type, string>(type, ExportHeaderStruct(type, toBeChecked)));
                 }
-                if (!forwarded.Contains(kvp.Key))
+
+                while (checkedStack.Count > 0)
+                {
+                    var val = checkedStack.Pop();
+                    if (forwarded.Contains(val.Key))
+                        continue;
+                    forwarded.Add(val.Key);
+                    sb.Append(val.Value);
+                }
+
+                if (!forwarded.Contains(kvp.Key) && !kvp.Key.IsArray)
                 {
                     forwarded.Add(kvp.Key);
-                    sb.Append(defs[kvp.Key]);
+                    sb.Append(ExportHeaderStruct(kvp.Key, kvp.Value));
                 }
             }
             sb.Append(body.ToString());
@@ -532,7 +557,7 @@ static inline {0} {1}({2}) {{
             return sb.ToString();
         }
 
-        public string ExportHeaderClass(Type type)
+        public string ExportHeaderClass(Type type, List<Type> deps)
         {
             StringBuilder sb2 = new StringBuilder();
             string typename = GetCType(type, false);
@@ -548,11 +573,15 @@ static inline {0} {1}({2}) {{
                         nameAndArgs[0] = method.Value.Name;
                         for (int i = 0; i < margs.Length; i++)
                         {
+                            if (!IsBaseCType(margs[i].ParameterType))
+                                deps.Add(margs[i].ParameterType);
                             string fmt = "{0}, _{1}";
                             if (IsCValueType(margs[i].ParameterType))
                                 fmt = "{0}*, _{1}";
                             nameAndArgs[i+1] = string.Format(fmt, GetCType(margs[i].ParameterType, false), margs[i].Name);
                         }
+                        if (!IsBaseCType(info.ReturnType))
+                            deps.Add(info.ReturnType);
                         string ret = GetCType(info.ReturnType, false);
                         if (IsCValueType(info.ReturnType))
                             ret += "*";
@@ -565,11 +594,15 @@ static inline {0} {1}({2}) {{
                         nameAndArgs[0] = "new_" + margs.Length;
                         for (int i = 0; i < margs.Length; i++)
                         {
+                            if (!IsBaseCType(margs[i].ParameterType))
+                                deps.Add(margs[i].ParameterType);
                             string fmt = "{0}, _{1}";
                             if (margs[i].ParameterType.IsValueType)
                                 fmt = "{0}*, _{1}";
                             nameAndArgs[i+1] = string.Format(fmt, GetCType(margs[i].ParameterType, false), margs[i].Name);
                         }
+                        if (!IsBaseCType(ctorInfo.DeclaringType))
+                            deps.Add(ctorInfo.DeclaringType);
                         string ret = GetCType(ctorInfo.DeclaringType, false);
                         if (ctorInfo.DeclaringType.IsValueType)
                             ret += "*";
@@ -585,7 +618,7 @@ static inline {0} {1}({2}) {{
         {
             if (!type.IsValueType)
             {
-                return ExportHeaderClass(type);
+                return ExportHeaderClass(type, deps);
             }
             FieldInfo[] fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
             string[] code = new string[fields.Length];
@@ -595,6 +628,8 @@ static inline {0} {1}({2}) {{
                     deps.Add(fields[i].FieldType);
                 code[i] = string.Format(HEADER_STRUCT_PROP, GetCType(fields[i].FieldType, false), fields[i].Name);
             }
+            if (!IsBaseCType(type))
+                deps.Add(type);
             return string.Format(HEADER_STRUCT_DEF, GetCType(type, false), string.Join("\n", code));
         }
 
@@ -707,7 +742,7 @@ static inline {0} {1}({2}) {{
             if (type == typeof(int))
                 return false;
             if (type == typeof(float))
-                return false;
+                return true; // note.
             if (type == typeof(bool))
                 return false;
             return type.IsValueType;

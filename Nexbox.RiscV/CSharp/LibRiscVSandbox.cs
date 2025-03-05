@@ -231,7 +231,6 @@ namespace LibRiscV
                 return;
             stopped = true;
             LibRiscVNative.libriscv_stop(machine);
-            throw new Exception();
         }
 
         public string MemString(ulong src)

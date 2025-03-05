@@ -1,6 +1,6 @@
 #include "api.h"
-#include <stdio.h>
-#include <stdarg.h>
+#include <cstdio>
+#include <cstdarg>
 
 void test() {
     tools::Clear();

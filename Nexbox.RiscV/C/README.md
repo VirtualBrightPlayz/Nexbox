@@ -1,5 +1,7 @@
 # Compiling LibRiscV/riscv_capi
 
+## Windows
+
 - In order to compile you must use LLVM/Clang, not MSVC
 - Make sure to install LLVM/Clang from the Visual Studio Installer
 
@@ -10,15 +12,53 @@ cmake -T ClangCL ..
 cmake --build .
 ```
 
+## Linux
+
+```bash
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+
 # Compiling Guest/Nexbox Programs
 
-Compiling a RISC-V program requires [MSYS2](https://www.msys2.org/), (Ubuntu) Linux or [Ubuntu WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
+## C/C++
 
-## Non-Ubuntu Linux
+Due to the nature of guest programs not having a real Standard C Library, the library *must* be packaged with the guest program. This isn't great as some standard C Libraries are not Licensed for propietary use when distributed. In other words, find a standard library which does not have restrictive licensing, such as MSVC (Microsoft) or glibc (GNU).
+
+Note the library must use Linux RISC-V System Calls.
+
+tl;dr
+Use Musl, which has a more permissive [license](https://git.musl-libc.org/cgit/musl/tree/COPYRIGHT).
+
+### Musl
+
+Compiling a RISC-V program with Musl libc requires Linux, which can be easily "emulated" via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) when using Windows.
+
+#### Toolchain
+
+According to [Musl's Official website](https://musl.libc.org/), there is a [community wiki](https://wiki.musl-libc.org/), which has an [unofficial, pre-compiled toolchain](https://musl.cc/) for download. Unless you are using a RISC-V CPU, use the `riscv64-linux-musl-cross.tgz` file on the website.
+
+#### Compile
+
+Inside the `bin` folder, you will find `riscv64-linux-musl-gcc`, which is our C compiler.
+
+In order to compile, you must statically link a program. Example command:
+
+```bash
+riscv64-linux-musl-gcc -march=rv64g -mabi=lp64d -fPIC -static -O2 -fpermissive test.cpp -o test.elf
+```
+
+### GNU C Library
+
+Compiling a RISC-V program with glibc requires [MSYS2](https://www.msys2.org/), (Ubuntu) Linux or [Ubuntu WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
+
+#### Non-Ubuntu Linux
 
 [Further documentation from LibRiscV](https://github.com/libriscv/libriscv/blob/master/docs/INTEGRATION.md#compiling-a-risc-v-program)
 
-## Ubuntu Linux or Ubuntu WSL
+#### Ubuntu Linux or Ubuntu WSL
 
 Install the riscv64 GCC compiler. The command below *should* work. If the package isn't found, try replacing the `12` with `13` or `14`
 
@@ -32,7 +72,7 @@ Use this command (or similar) to compile a single file using riscv64 GCC
 riscv64-linux-gnu-gcc-12 -march=rv64g -mabi=lp64d -fPIC -static -O2 -fpermissive main.cpp -o script.elf
 ```
 
-## MSYS2 (Untested)
+#### MSYS2 (Untested)
 
 When installing MSYS2, make note of the installation path as you will need it later.
 

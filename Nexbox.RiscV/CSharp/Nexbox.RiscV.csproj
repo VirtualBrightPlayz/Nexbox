@@ -8,5 +8,10 @@
     <ItemGroup>
       <ProjectReference Include="..\..\Nexbox\Nexbox.csproj" />
     </ItemGroup>
+    <ItemGroup>
+      <Content Include="..\C\build\libriscv_capi.so">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
 
 </Project>
