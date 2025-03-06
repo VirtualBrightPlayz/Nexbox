@@ -159,7 +159,7 @@ namespace LibRiscV
             const int REG_A1 = 11;
             ulong a0 = sandbox.UserSyscall?.Invoke(sandbox.MemString(regs->r[REG_A0]), regs->r[REG_A1]) ?? 0;
             // *regs = prevRegs;
-            // *ctPtr = prevCtPtr;
+            *ctPtr = prevCtPtr;
             regs->r[REG_A0] = a0;
         }
 

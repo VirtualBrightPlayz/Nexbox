@@ -33,11 +33,15 @@ typedef struct {0} {{
 ";
         public const string HEADER_STRUCT_DEF_FWD = "typedef struct {0} {0};\n";
         public const string HEADER_STRUCT_PROP = "    {0} {1};";
+        public const string HEADER_CLASS_DEF_FWD_DECLARE = "API_OBJECT_FWD_DECLARE({0})\n";
         public const string HEADER_CLASS_DEF_FWD = "API_OBJECT_DECLARE({0})\n";
+        public const string HEADER_CLASS_DEF_FWD_STATIC_FUNC = "API_METHOD_RET_{0}_DECLARE({4}, {1}, {2}, {3})\n";
+        public const string HEADER_CLASS_DEF_FWD_FUNC = "API_OBJECT_METHOD_RET_{0}_DECLARE({4}, {1}, {2}, {3})\n";
         public const string HEADER_CLASS_DEF = "API_OBJECT_BEGIN({0})\n";
         public const string HEADER_CLASS_DEF_STATIC_FUNC = "API_METHOD_RET_{0}({4}, {1}, {2}, {3})\n";
         public const string HEADER_CLASS_DEF_FUNC = "API_OBJECT_METHOD_RET_{0}({4}, {1}, {2}, {3})\n";
         public const string HEADER_CLASS_DEF_END = "API_OBJECT_END()\n\n";
+        public const string HEADER_CLASS_DEF_FWD_END = "API_OBJECT_DECLARE_END()\n\n";
 
         public const string HEADER_FUNC_RET = @"
 static inline {0} {1}({2}) {{
@@ -386,11 +390,9 @@ static inline {0} {1}({2}) {{
                 return unchecked((int)vaddr);
             if (type == typeof(float))
             {
-                // Span<byte> sp = stackalloc byte[sizeof(ulong)];
                 Span<ulong> sp = stackalloc ulong[1];
+                sp[0] = vaddr;
                 return MemoryMarshal.Cast<ulong, float>(sp)[0];
-                // BitConverter.TryWriteBytes(sp, vaddr);
-                // return BitConverter.ToSingle(sp);
             }
             uint size = (uint)Marshal.SizeOf(type);
             IntPtr ptr = sandbox.MemObject(vaddr, size);
@@ -425,7 +427,7 @@ static inline {0} {1}({2}) {{
                 return 0;
             ulong strAddr = sandbox.Malloc((ulong)(str.Length + 1));
             if (strAddr == 0)
-                return 0;
+                return strAddr;
             sandbox.MemSetString(strAddr, str);
             return strAddr;
         }
@@ -436,7 +438,7 @@ static inline {0} {1}({2}) {{
                 return 0;
             ulong flAddr = sandbox.Malloc(sizeof(float));
             if (flAddr == 0)
-                return 0;
+                return flAddr;
             sandbox.MemSet(flAddr, BitConverter.GetBytes(fl));
             return flAddr;
         }
@@ -528,11 +530,12 @@ static inline {0} {1}({2}) {{
                 {
                     exported.Add(t);
                     deps.Add(t, new List<Type>());
-                    defs.Add(t, ExportHeaderStruct(t, deps[t]));
+                    defs.Add(t, ExportHeaderStruct(t, deps[t], true));
                     depsCount.Add(t, GetAllDepends(t).Count);
                 }
             }
             List<Type> forwarded = new List<Type>();
+            StringBuilder fwddecls = new StringBuilder();
             StringBuilder decls = new StringBuilder();
             StringBuilder impls = new StringBuilder();
             foreach (var kvp in depsCount.OrderBy(x => x.Value))
@@ -540,13 +543,19 @@ static inline {0} {1}({2}) {{
                 if (!forwarded.Contains(kvp.Key) && !kvp.Key.IsArray)
                 {
                     forwarded.Add(kvp.Key);
+                    if (kvp.Key == typeof(string))
+                        continue;
                     if (kvp.Key.IsValueType)
-                        decls.Append(string.Format(HEADER_STRUCT_DEF_FWD, GetCType(kvp.Key, false)));
+                        fwddecls.Append(string.Format(HEADER_STRUCT_DEF_FWD, GetCType(kvp.Key, false)));
                     else
-                        decls.Append(string.Format(HEADER_CLASS_DEF_FWD, GetCType(kvp.Key, false)));
-                    impls.Append(ExportHeaderStruct(kvp.Key, new List<Type>()));
+                    {
+                        fwddecls.Append(string.Format(HEADER_CLASS_DEF_FWD_DECLARE, GetCType(kvp.Key, false)));
+                        decls.Append(ExportHeaderStruct(kvp.Key, new List<Type>(), false));
+                    }
+                    impls.Append(ExportHeaderStruct(kvp.Key, new List<Type>(), true));
                 }
             }
+            sb.Append(fwddecls.ToString());
             sb.Append(decls.ToString());
             sb.Append(impls.ToString());
             sb.Append(body.ToString());
@@ -607,11 +616,11 @@ static inline {0} {1}({2}) {{
             return deps;
         }
 
-        public string ExportHeaderClass(Type type, List<Type> deps)
+        public string ExportHeaderClass(Type type, List<Type> deps, bool impl)
         {
             StringBuilder sb2 = new StringBuilder();
             string typename = GetCType(type, false);
-            sb2.Append(string.Format(HEADER_CLASS_DEF, typename));
+            sb2.Append(string.Format(impl ? HEADER_CLASS_DEF : HEADER_CLASS_DEF_FWD, typename));
             foreach (var method in methods)
             {
                 if (method.Value.DeclaringType == type)
@@ -635,7 +644,10 @@ static inline {0} {1}({2}) {{
                         string ret = GetCType(info.ReturnType, false);
                         if (!IsCValueType(info.ReturnType))
                             ret += "*";
-                        sb2.Append(string.Format(info.IsStatic ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs), info.ReturnType == typeof(float) ? "fpusercall" : "pusercall"));
+                        string funcFmt = info.IsStatic ? HEADER_CLASS_DEF_FWD_STATIC_FUNC : HEADER_CLASS_DEF_FWD_FUNC;
+                        if (impl)
+                            funcFmt = info.IsStatic ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FUNC;
+                        sb2.Append(string.Format(funcFmt, margs.Length, typename, ret, string.Join(", ", nameAndArgs), info.ReturnType == typeof(float) ? "fpusercall" : "pusercall"));
                     }
                     else if (method.Value is ConstructorInfo ctorInfo && !ctorInfo.IsStatic)
                     {
@@ -654,21 +666,21 @@ static inline {0} {1}({2}) {{
                         if (!IsBaseCType(ctorInfo.DeclaringType))
                             deps.Add(ctorInfo.DeclaringType);
                         string ret = GetCType(ctorInfo.DeclaringType, false);
-                        // if (ctorInfo.DeclaringType.IsValueType)
+                        if (ctorInfo.DeclaringType.IsValueType)
                             ret += "*";
-                        sb2.Append(string.Format(HEADER_CLASS_DEF_STATIC_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs), "pusercall"));
+                        sb2.Append(string.Format(impl ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FWD_STATIC_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs), "pusercall"));
                     }
                 }
             }
-            sb2.Append(HEADER_CLASS_DEF_END);
+            sb2.Append(impl ? HEADER_CLASS_DEF_END : HEADER_CLASS_DEF_FWD_END);
             return sb2.ToString();
         }
 
-        public string ExportHeaderStruct(Type type, List<Type> deps)
+        public string ExportHeaderStruct(Type type, List<Type> deps, bool impl)
         {
             if (!type.IsValueType)
             {
-                return ExportHeaderClass(type, deps);
+                return ExportHeaderClass(type, deps, impl);
             }
             FieldInfo[] fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
             string[] code = new string[fields.Length];
@@ -686,8 +698,8 @@ static inline {0} {1}({2}) {{
         public string ExportHeaderGlobal(string name, Type type)
         {
             string ret = GetCType(type) + '*';
-            // return string.Format(HEADER_FUNC_RET, ret, name, "", "", "return ");
-            return string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})");
+            return string.Format(HEADER_FUNC_RET, ret, name, "", "", "return ");
+            // return string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})");
         }
 
         public string ExportHeaderFunction(string name, MethodBase info, int skip = 0)
