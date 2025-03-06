@@ -386,10 +386,11 @@ static inline {0} {1}({2}) {{
                 return unchecked((int)vaddr);
             if (type == typeof(float))
             {
-                IntPtr fptr = Marshal.AllocHGlobal(sizeof(ulong));
-                Span<byte> sp = new Span<byte>(fptr.ToPointer(), sizeof(ulong));
-                BitConverter.TryWriteBytes(sp, vaddr);
-                return BitConverter.ToSingle(sp);
+                // Span<byte> sp = stackalloc byte[sizeof(ulong)];
+                Span<ulong> sp = stackalloc ulong[1];
+                return MemoryMarshal.Cast<ulong, float>(sp)[0];
+                // BitConverter.TryWriteBytes(sp, vaddr);
+                // return BitConverter.ToSingle(sp);
             }
             uint size = (uint)Marshal.SizeOf(type);
             IntPtr ptr = sandbox.MemObject(vaddr, size);
