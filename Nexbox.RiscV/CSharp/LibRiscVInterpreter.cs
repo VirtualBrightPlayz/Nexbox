@@ -231,7 +231,6 @@ static inline {0} {1}({2}) {{
                 {
                     ParameterInfo[] mArgs = method.GetParameters();
                     UserArgStruct args = MemGetObject<UserArgStruct>(vaddr);
-                    Console.WriteLine($"{func} {args.target}");
                     ulong[] ptrArr = new ulong[mArgs.Length];
                     for (int i = 0; i < mArgs.Length; i++)
                     {
@@ -268,7 +267,6 @@ static inline {0} {1}({2}) {{
                             object arg = MemGetObjectFromType(ptrArr[i], mArgs[i].ParameterType);
                             argArr[i] = arg;
                         }
-                        Console.WriteLine($"{mArgs[i].Name} ({mArgs[i].ParameterType.FullName}) = {argArr[i]?.GetType()?.FullName} ({ptrArr[i]})");
                     }
                     object target = null;
                     if (!method.IsStatic && !method.IsConstructor)
