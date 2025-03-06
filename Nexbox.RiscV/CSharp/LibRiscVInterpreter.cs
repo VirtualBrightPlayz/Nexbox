@@ -697,9 +697,9 @@ static inline {0} {1}({2}) {{
 
         public string ExportHeaderGlobal(string name, Type type)
         {
-            string ret = GetCType(type) + '*';
-            return string.Format(HEADER_FUNC_RET, ret, name, "", "", "return ");
-            // return string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})");
+            string ret = GetCType(type);
+            // return string.Format(HEADER_FUNC_RET, ret, name, "", "", "return ");
+            return string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})");
         }
 
         public string ExportHeaderFunction(string name, MethodBase info, int skip = 0)
