@@ -77,6 +77,7 @@ namespace LibRiscV
             LibRiscVSandbox sandbox = handle.Target as LibRiscVSandbox;
             string str = Marshal.PtrToStringAnsi((IntPtr)msg);
             sandbox.stderr?.Invoke(type, str, data);
+            sandbox.Stop();
         }
 
         private static void Syscall_Exit(LibRiscVNative.RISCVMachine *machine)
@@ -86,7 +87,7 @@ namespace LibRiscV
             LibRiscVSandbox sandbox = handle.Target as LibRiscVSandbox;
             const int REG_A0 = 10;
             sandbox.stdout?.Invoke($"Exit called! Status={regs->r[REG_A0]}");
-            LibRiscVNative.libriscv_stop(machine);
+            sandbox.Stop();
         }
 
         private static void Syscall_Read(LibRiscVNative.RISCVMachine *machine)
@@ -157,8 +158,8 @@ namespace LibRiscV
             const int REG_A0 = 10;
             const int REG_A1 = 11;
             ulong a0 = sandbox.UserSyscall?.Invoke(sandbox.MemString(regs->r[REG_A0]), regs->r[REG_A1]) ?? 0;
-            *regs = prevRegs;
-            *ctPtr = prevCtPtr;
+            // *regs = prevRegs;
+            // *ctPtr = prevCtPtr;
             regs->r[REG_A0] = a0;
         }
 
@@ -271,6 +272,21 @@ namespace LibRiscV
             ulong vAddr = LibRiscVNative.libriscv_stack_push(machine, regs, ptr.ToPointer(), (uint)str.Length + 1); // add one to copy null byte
             Marshal.FreeHGlobal(ptr);
             return vAddr;
+        }
+
+        public unsafe ulong StackPushFloat(float fl)
+        {
+            if (machine == null || stopped)
+                return 0;
+            LibRiscVNative.RISCVRegisters *regs = LibRiscVNative.libriscv_get_registers(machine);
+            const int flOffset = 0;
+            regs->fr32[(10 + flOffset) * 2 + 1] = fl;
+            return 0;
+            // IntPtr ptr = Marshal.AllocHGlobal(sizeof(float));
+            // BitConverter.TryWriteBytes(new Span<byte>(ptr.ToPointer(), sizeof(float)), fl);
+            // ulong vAddr = LibRiscVNative.libriscv_stack_push(machine, regs, ptr.ToPointer(), sizeof(float));
+            // Marshal.FreeHGlobal(ptr);
+            // return vAddr;
         }
 
         public void MemSetString(ulong addr, string str)

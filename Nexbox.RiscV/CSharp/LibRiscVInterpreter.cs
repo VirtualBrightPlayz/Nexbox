@@ -35,8 +35,8 @@ typedef struct {0} {{
         public const string HEADER_STRUCT_PROP = "    {0} {1};";
         public const string HEADER_CLASS_DEF_FWD = "API_OBJECT_DECLARE({0})\n";
         public const string HEADER_CLASS_DEF = "API_OBJECT_BEGIN({0})\n";
-        public const string HEADER_CLASS_DEF_STATIC_FUNC = "API_METHOD_RET_{0}({1}, {2}, {3})\n";
-        public const string HEADER_CLASS_DEF_FUNC = "API_OBJECT_METHOD_RET_{0}({1}, {2}, {3})\n";
+        public const string HEADER_CLASS_DEF_STATIC_FUNC = "API_METHOD_RET_{0}({4}, {1}, {2}, {3})\n";
+        public const string HEADER_CLASS_DEF_FUNC = "API_OBJECT_METHOD_RET_{0}({4}, {1}, {2}, {3})\n";
         public const string HEADER_CLASS_DEF_END = "API_OBJECT_END()\n\n";
 
         public const string HEADER_FUNC_RET = @"
@@ -90,7 +90,7 @@ static inline {0} {1}({2}) {{
             delegates = new Dictionary<string, Delegate>();
             methods = new Dictionary<string, MethodBase>();
             targets = new Dictionary<ulong, object>();
-            targetIdCounter = 1_000_000; // start at 1, we don't want null to equal something
+            targetIdCounter = 1_000_000; // start at 1000000
             CreateGlobal("engine", new LibRiscVEngine(this));
             ForwardType("SandboxFunc", typeof(SandboxFunc));
         }
@@ -231,34 +231,44 @@ static inline {0} {1}({2}) {{
                 {
                     ParameterInfo[] mArgs = method.GetParameters();
                     UserArgStruct args = MemGetObject<UserArgStruct>(vaddr);
+                    Console.WriteLine($"{func} {args.target}");
+                    ulong[] ptrArr = new ulong[mArgs.Length];
+                    for (int i = 0; i < mArgs.Length; i++)
+                    {
+                        if (args.args[i] == 0)
+                            ptrArr[i] = 0;
+                        else
+                            ptrArr[i] = MemGetPtr(args.args[i]);
+                    }
                     object[] argArr = new object[mArgs.Length];
                     for (int i = 0; i < mArgs.Length; i++)
                     {
                         // TODO: add support for arrays
                         if (mArgs[i].ParameterType == typeof(string))
                         {
-                            argArr[i] = MemGetString(args.args[i]);
+                            argArr[i] = MemGetString(ptrArr[i]);
                         }
                         else if (!mArgs[i].ParameterType.IsValueType)
                         {
-                            if (targets.TryGetValue(args.args[i], out var targ))
+                            if (targets.TryGetValue(ptrArr[i], out var targ))
                             {
                                 argArr[i] = targ;
                             }
-                            else if (args.args[i] == 0)
+                            else if (ptrArr[i] == 0)
                             {
                                 argArr[i] = null;
                             }
                             else
                             {
-                                argArr[i] = args.args[i];
+                                argArr[i] = ptrArr[i];
                             }
                         }
                         else
                         {
-                            object arg = MemGetObjectFromType(args.args[i], mArgs[i].ParameterType);
+                            object arg = MemGetObjectFromType(ptrArr[i], mArgs[i].ParameterType);
                             argArr[i] = arg;
                         }
+                        Console.WriteLine($"{mArgs[i].Name} ({mArgs[i].ParameterType.FullName}) = {argArr[i]?.GetType()?.FullName} ({ptrArr[i]})");
                     }
                     object target = null;
                     if (!method.IsStatic && !method.IsConstructor)
@@ -276,6 +286,8 @@ static inline {0} {1}({2}) {{
                         return 0;
                     else if (ret is string str)
                         return MemAllocString(str);
+                    else if (ret is float fl)
+                        return sandbox.StackPushFloat(fl);
                     else if (ret.GetType().IsValueType)
                         return MemAllocObject(ret);
                     else
@@ -366,19 +378,23 @@ static inline {0} {1}({2}) {{
         {
             if (sandbox == null)
                 return default;
+            if (type == typeof(ulong))
+                return vaddr;
+            if (type == typeof(long))
+                return unchecked((long)vaddr);
+            if (type == typeof(uint))
+                return unchecked((uint)vaddr);
+            if (type == typeof(int))
+                return unchecked((int)vaddr);
+            if (type == typeof(float))
+            {
+                IntPtr fptr = Marshal.AllocHGlobal(sizeof(ulong));
+                Span<byte> sp = new Span<byte>(fptr.ToPointer(), sizeof(ulong));
+                BitConverter.TryWriteBytes(sp, vaddr);
+                return BitConverter.ToSingle(sp);
+            }
             uint size = (uint)Marshal.SizeOf(type);
             IntPtr ptr = sandbox.MemObject(vaddr, size);
-            ReadOnlySpan<byte> span = new ReadOnlySpan<byte>(ptr.ToPointer(), (int)size);
-            if (type == typeof(ulong))
-                return BitConverter.ToUInt64(span.ToArray(), 0);
-            if (type == typeof(long))
-                return BitConverter.ToInt64(span.ToArray(), 0);
-            if (type == typeof(uint))
-                return BitConverter.ToUInt32(span.ToArray(), 0);
-            if (type == typeof(int))
-                return BitConverter.ToInt32(span.ToArray(), 0);
-            if (type == typeof(float))
-                return BitConverter.ToSingle(span.ToArray(), 0);
             return Marshal.PtrToStructure(ptr, type);
         }
 
@@ -410,9 +426,20 @@ static inline {0} {1}({2}) {{
                 return 0;
             ulong strAddr = sandbox.Malloc((ulong)(str.Length + 1));
             if (strAddr == 0)
-                return strAddr;
+                return 0;
             sandbox.MemSetString(strAddr, str);
             return strAddr;
+        }
+
+        public ulong MemAllocFloat(float fl)
+        {
+            if (sandbox == null)
+                return 0;
+            ulong flAddr = sandbox.Malloc(sizeof(float));
+            if (flAddr == 0)
+                return 0;
+            sandbox.MemSet(flAddr, BitConverter.GetBytes(fl));
+            return flAddr;
         }
 
         public void MemFree(ulong vaddr)
@@ -609,7 +636,7 @@ static inline {0} {1}({2}) {{
                         string ret = GetCType(info.ReturnType, false);
                         if (!IsCValueType(info.ReturnType))
                             ret += "*";
-                        sb2.Append(string.Format(info.IsStatic ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs)));
+                        sb2.Append(string.Format(info.IsStatic ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs), info.ReturnType == typeof(float) ? "fpusercall" : "pusercall"));
                     }
                     else if (method.Value is ConstructorInfo ctorInfo && !ctorInfo.IsStatic)
                     {
@@ -628,9 +655,9 @@ static inline {0} {1}({2}) {{
                         if (!IsBaseCType(ctorInfo.DeclaringType))
                             deps.Add(ctorInfo.DeclaringType);
                         string ret = GetCType(ctorInfo.DeclaringType, false);
-                        if (ctorInfo.DeclaringType.IsValueType)
+                        // if (ctorInfo.DeclaringType.IsValueType)
                             ret += "*";
-                        sb2.Append(string.Format(HEADER_CLASS_DEF_STATIC_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs)));
+                        sb2.Append(string.Format(HEADER_CLASS_DEF_STATIC_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs), "pusercall"));
                     }
                 }
             }
@@ -659,9 +686,9 @@ static inline {0} {1}({2}) {{
 
         public string ExportHeaderGlobal(string name, Type type)
         {
-            string ret = GetCType(type);
-            return string.Format(HEADER_FUNC_RET, ret, name, "", "", "return ");
-            // return string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})");
+            string ret = GetCType(type) + '*';
+            // return string.Format(HEADER_FUNC_RET, ret, name, "", "", "return ");
+            return string.Format(HEADER_FUNC_RET, ret, name, "", "", $"return ({ret})");
         }
 
         public string ExportHeaderFunction(string name, MethodBase info, int skip = 0)
@@ -712,7 +739,7 @@ static inline {0} {1}({2}) {{
             if (type == typeof(int))
                 return "int";
             if (type == typeof(float))
-                return "float*";
+                return "float";
             if (type == typeof(bool))
                 return "char";
             headerExportedTypes.Enqueue(type);
@@ -774,7 +801,7 @@ static inline {0} {1}({2}) {{
             if (type == typeof(bool))
                 return false;
             */
-            return false;//type.IsValueType;
+            return !type.IsValueType;
         }
 
         #endregion

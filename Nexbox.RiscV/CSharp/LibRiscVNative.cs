@@ -32,7 +32,7 @@ namespace LibRiscV
             [FieldOffset(0)] public double f64;
         }
 
-        [StructLayout(LayoutKind.Explicit)]
+        [StructLayout(LayoutKind.Explicit, Pack = 32)]
         public struct RISCVRegisters
         {
             [FieldOffset(0)] public UInt64 pc;

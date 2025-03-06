@@ -128,7 +128,7 @@ LIBRISCVAPI int libriscv_setup_vmcall(RISCVMachine *m, uint64_t address);
 #define LIBRISCV_ARG_REGISTER(regs, n)  (regs)->r[10 + (n)]
 
 /* Put data on the current stack, with maintained 16-byte alignment. */
-LIBRISCVAPI inline uint64_t libriscv_stack_push(RISCVMachine *m, RISCVRegisters *regs, const char *data, unsigned len) {
+LIBRISCVAPI uint64_t libriscv_stack_push(RISCVMachine *m, RISCVRegisters *regs, const char *data, unsigned len) {
 	regs->r[2] -= len;
 	LIBRISCV_REALIGN_STACK(regs);
 	libriscv_copy_to_guest(m, regs->r[2], data, len);

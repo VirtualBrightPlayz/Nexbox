@@ -5,92 +5,97 @@
 
 #ifdef __cplusplus
 
+#define API_OBJECT_DECLARE(name) typedef void* name##_ptr; struct name;
+
 #define API_OBJECT_BEGIN(name) typedef void* name##_ptr; struct name { \
     name##_ptr addr; \
     name(void* ptr) { \
         this->addr = (name##_ptr)ptr; \
-    } \
-    operator void*() { return this->addr; }
+    }
 #define API_OBJECT_END() };
 
-#define API_METHOD_RET_0(type, ret, name) \
+#define API_METHOD_RET_0(call, type, ret, name) \
 static inline ret name() { \
     UserArgStruct args; \
-    return (ret)pusercall(#type "_" #name, &args); \
+    return (ret)call(#type "_" #name, &args); \
 }
-#define API_METHOD_RET_1(type, ret, name, type1, name1) \
+#define API_METHOD_RET_1(call, type, ret, name, type1, name1) \
 static inline ret name(type1 name1) { \
     UserArgStruct args; \
-    args.args[0] = (void*)name1; \
-    return (ret)pusercall(#type "_" #name, &args); \
+    args.args[0] = (void*)&name1; \
+    return (ret)call(#type "_" #name, &args); \
 }
-#define API_METHOD_RET_2(type, ret, name, type1, name1, type2, name2) \
+#define API_METHOD_RET_2(call, type, ret, name, type1, name1, type2, name2) \
 static inline ret name(type1 name1, type2 name2) { \
     UserArgStruct args; \
-    args.args[0] = (void*)name1; \
-    args.args[1] = (void*)name2; \
-    return (ret)pusercall(#type "_" #name, &args); \
+    args.args[0] = (void*)&name1; \
+    args.args[1] = (void*)&name2; \
+    return (ret)call(#type "_" #name, &args); \
 }
-#define API_METHOD_RET_3(type, ret, name, type1, name1, type2, name2, type3, name3) \
+#define API_METHOD_RET_3(call, type, ret, name, type1, name1, type2, name2, type3, name3) \
 static inline ret name(type1 name1, type2 name2, type3 name3) { \
     UserArgStruct args; \
-    args.args[0] = (void*)name1; \
-    args.args[1] = (void*)name2; \
-    args.args[2] = (void*)name3; \
-    return (ret)pusercall(#type "_" #name, &args); \
+    args.args[0] = (void*)&name1; \
+    args.args[1] = (void*)&name2; \
+    args.args[2] = (void*)&name3; \
+    return (ret)call(#type "_" #name, &args); \
 }
-#define API_METHOD_RET_4(type, ret, name, type1, name1, type2, name2, type3, name3, type4, name4) \
+#define API_METHOD_RET_4(call, type, ret, name, type1, name1, type2, name2, type3, name3, type4, name4) \
 static inline ret name(type1 name1, type2 name2, type3 name3, type4 name4) { \
     UserArgStruct args; \
-    args.args[0] = (void*)name1; \
-    args.args[1] = (void*)name2; \
-    args.args[2] = (void*)name3; \
-    args.args[3] = (void*)name4; \
-    return (ret)pusercall(#type "_" #name, &args); \
+    args.args[0] = (void*)&name1; \
+    args.args[1] = (void*)&name2; \
+    args.args[2] = (void*)&name3; \
+    args.args[3] = (void*)&name4; \
+    return (ret)call(#type "_" #name, &args); \
 }
 
-#define API_OBJECT_METHOD_RET_0(type, ret, name) \
+#define API_OBJECT_METHOD_RET_0(call, type, ret, name) \
 inline ret name() { \
     UserArgStruct args; \
     args.target = (void*)this->addr; \
-    return (ret)pusercall(#type "_" #name, &args); \
+    return (ret)call(#type "_" #name, &args); \
 }
-#define API_OBJECT_METHOD_RET_1(type, ret, name, type1, name1) \
+#define API_OBJECT_METHOD_RET_1(call, type, ret, name, type1, name1) \
 inline ret name(type1 name1) { \
     UserArgStruct args; \
     args.target = (void*)this->addr; \
-    args.args[0] = (void*)name1; \
-    return (ret)pusercall(#type "_" #name, &args); \
+    args.args[0] = (void*)&name1; \
+    return (ret)call(#type "_" #name, &args); \
 }
-#define API_OBJECT_METHOD_RET_2(type, ret, name, type1, name1, type2, name2) \
+#define API_OBJECT_METHOD_RET_2(call, type, ret, name, type1, name1, type2, name2) \
 inline ret name(type1 name1, type2 name2) { \
     UserArgStruct args; \
     args.target = (void*)this->addr; \
-    args.args[0] = (void*)name1; \
-    args.args[1] = (void*)name2; \
-    return (ret)pusercall(#type "_" #name, &args); \
+    args.args[0] = (void*)&name1; \
+    args.args[1] = (void*)&name2; \
+    return (ret)call(#type "_" #name, &args); \
 }
-#define API_OBJECT_METHOD_RET_3(type, ret, name, type1, name1, type2, name2, type3, name3) \
+#define API_OBJECT_METHOD_RET_3(call, type, ret, name, type1, name1, type2, name2, type3, name3) \
 inline ret name(type1 name1, type2 name2, type3 name3) { \
     UserArgStruct args; \
     args.target = (void*)this->addr; \
-    args.args[0] = (void*)name1; \
-    args.args[1] = (void*)name2; \
-    args.args[2] = (void*)name3; \
-    return (ret)pusercall(#type "_" #name, &args); \
+    args.args[0] = (void*)&name1; \
+    args.args[1] = (void*)&name2; \
+    args.args[2] = (void*)&name3; \
+    return (ret)call(#type "_" #name, &args); \
 }
-#define API_OBJECT_METHOD_RET_4(type, ret, name, type1, name1, type2, name2, type3, name3, type4, name4) \
+#define API_OBJECT_METHOD_RET_4(call, type, ret, name, type1, name1, type2, name2, type3, name3, type4, name4) \
 inline ret name(type1 name1, type2 name2, type3 name3, type4 name4) { \
     UserArgStruct args; \
     args.target = (void*)this->addr; \
-    args.args[0] = (void*)name1; \
-    args.args[1] = (void*)name2; \
-    args.args[2] = (void*)name3; \
-    args.args[3] = (void*)name4; \
-    return (ret)pusercall(#type "_" #name, &args); \
+    args.args[0] = (void*)&name1; \
+    args.args[1] = (void*)&name2; \
+    args.args[2] = (void*)&name3; \
+    args.args[3] = (void*)&name4; \
+    return (ret)call(#type "_" #name, &args); \
 }
 
 #else
+
+#error "Not supported yet"
+
+#define API_OBJECT_DECLARE(name) typedef void* name;
 
 #define API_OBJECT_BEGIN(name) typedef void* name;
 #define API_OBJECT_END()

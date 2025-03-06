@@ -2,7 +2,7 @@
 
 public class TestClass
 {
-    public int AddNumbers(int a, int b) => a + b;
+    public static float AddNumbers(float a, float b) => a + b;
 
     public void CreateAndExec(object f, params object[] args) => SandboxFuncTools.InvokeSandboxFunc(SandboxFuncTools.TryConvert(f), args);
 
