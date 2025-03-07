@@ -328,18 +328,18 @@ namespace LibRiscV
             Marshal.StructureToPtr(obj, ptr, false);
         }
 
-        public ulong Malloc(ulong size)
+        public ulong MemMap(ulong size)
         {
-            if (Call("malloc", out long ret, size))
-            {
-                return unchecked((ulong)ret);
-            }
-            return 0;
+            if (machine == null || stopped)
+                return 0;
+            return LibRiscVNative.libriscv_mmap_allocate(machine, size);
         }
 
-        public void Free(ulong addr)
+        public bool MemUnmap(ulong addr, ulong size)
         {
-            Call("free", out long _, addr);
+            if (machine == null || stopped)
+                return false;
+            return LibRiscVNative.libriscv_mmap_unmap(machine, addr, size) != 0;
         }
 
         private void Convert(LibRiscVNative.RISCVRegisters *regs, int offset, object obj, ref int flOffset)

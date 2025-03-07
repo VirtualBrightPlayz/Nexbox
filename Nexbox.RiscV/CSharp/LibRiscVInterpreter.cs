@@ -403,7 +403,7 @@ static inline {0} {1}({2}) {{
         {
             if (sandbox == null)
                 return 0;
-            ulong objAddr = sandbox.Malloc((ulong)Marshal.SizeOf(obj));
+            ulong objAddr = sandbox.MemMap((ulong)Marshal.SizeOf(obj));
             if (objAddr == 0)
                 return objAddr;
             sandbox.MemSetObject(objAddr, obj);
@@ -414,7 +414,7 @@ static inline {0} {1}({2}) {{
         {
             if (sandbox == null)
                 return 0;
-            ulong objAddr = sandbox.Malloc((ulong)Marshal.SizeOf<T>());
+            ulong objAddr = sandbox.MemMap((ulong)Marshal.SizeOf<T>());
             if (objAddr == 0)
                 return objAddr;
             sandbox.MemSetObject(objAddr, obj);
@@ -425,29 +425,11 @@ static inline {0} {1}({2}) {{
         {
             if (sandbox == null)
                 return 0;
-            ulong strAddr = sandbox.Malloc((ulong)(str.Length + 1));
+            ulong strAddr = sandbox.MemMap((ulong)(str.Length + 1));
             if (strAddr == 0)
                 return strAddr;
             sandbox.MemSetString(strAddr, str);
             return strAddr;
-        }
-
-        public ulong MemAllocFloat(float fl)
-        {
-            if (sandbox == null)
-                return 0;
-            ulong flAddr = sandbox.Malloc(sizeof(float));
-            if (flAddr == 0)
-                return flAddr;
-            sandbox.MemSet(flAddr, BitConverter.GetBytes(fl));
-            return flAddr;
-        }
-
-        public void MemFree(ulong vaddr)
-        {
-            if (sandbox == null)
-                return;
-            sandbox.Free(vaddr);
         }
 
         public ulong Jump(ulong addr, params object[] args)
@@ -730,7 +712,7 @@ static inline {0} {1}({2}) {{
             else if (info is MethodInfo info2)
                 retType = info2.ReturnType;
             string ret = GetCType(retType);
-            if (retType.IsValueType)
+            if (IsBaseCValueType(retType))
                 ret += "*";
             return string.Format(HEADER_FUNC_RET, ret, name, string.Join(", ", args), string.Join("\n", code), ret == "void" ? "" : $"return ({ret})");
         }
@@ -773,6 +755,25 @@ static inline {0} {1}({2}) {{
         {
             if (type == typeof(void))
                 return true;
+            if (type == typeof(string))
+                return true;
+            if (type == typeof(ulong))
+                return true;
+            if (type == typeof(long))
+                return true;
+            if (type == typeof(uint))
+                return true;
+            if (type == typeof(int))
+                return true;
+            if (type == typeof(float))
+                return true;
+            if (type == typeof(bool))
+                return true;
+            return false;
+        }
+
+        public bool IsBaseCValueType(Type type)
+        {
             if (type == typeof(string))
                 return true;
             if (type == typeof(ulong))

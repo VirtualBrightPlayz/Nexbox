@@ -311,6 +311,18 @@ const char * libriscv_memview(RISCVMachine *m, uint64_t src, unsigned length)
 }
 
 extern "C"
+uint64_t libriscv_mmap_allocate(RISCVMachine *m, uint64_t size)
+{
+	return MACHINE(m)->memory.mmap_allocate(size);
+}
+
+extern "C"
+bool libriscv_mmap_unmap(RISCVMachine *m, uint64_t addr, uint64_t size)
+{
+	return MACHINE(m)->memory.mmap_unmap(addr, size);
+}
+
+extern "C"
 void libriscv_trigger_exception(RISCVMachine *m, unsigned exception, uint64_t data)
 {
 	MACHINE(m)->cpu.trigger_exception(exception, data);

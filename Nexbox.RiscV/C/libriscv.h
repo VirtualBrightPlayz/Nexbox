@@ -113,6 +113,10 @@ typedef void (*riscv_syscall_handler_t)(RISCVMachine *m);
 /* Install a custom system call handler. */
 LIBRISCVAPI int libriscv_set_syscall_handler(unsigned num, riscv_syscall_handler_t);
 
+LIBRISCVAPI uint64_t libriscv_mmap_allocate(RISCVMachine *m, uint64_t size);
+
+LIBRISCVAPI bool libriscv_mmap_unmap(RISCVMachine *m, uint64_t addr, uint64_t size);
+
 /* Triggers a CPU exception. Only safe to call from a system call. Will end execution. */
 LIBRISCVAPI void libriscv_trigger_exception(RISCVMachine *m, unsigned exception, uint64_t data);
 

@@ -103,6 +103,12 @@ namespace LibRiscV
         public static extern int libriscv_set_syscall_handler(uint num, riscv_syscall_handler_t sys_handler);
 
         [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]
+        public static extern UInt64 libriscv_mmap_allocate(RISCVMachine* m, UInt64 size);
+
+        [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]
+        public static extern int libriscv_mmap_unmap(RISCVMachine* m, UInt64 addr, UInt64 size);
+
+        [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]
         public static extern void libriscv_trigger_exception(RISCVMachine* m, uint exception, UInt64 data);
 
         [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]
