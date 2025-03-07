@@ -416,7 +416,7 @@ namespace LibRiscV
                 ret = LibRiscVNative.libriscv_return_value(machine);
                 // Unsafe.Copy(regs, ref prevRegs);
                 // *regs = prevRegs;
-                // *ctPtr = prevCtPtr;
+                *ctPtr = prevCtPtr;
                 return true;
             }
             else

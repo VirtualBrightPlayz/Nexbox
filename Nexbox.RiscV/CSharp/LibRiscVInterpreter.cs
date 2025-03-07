@@ -71,6 +71,7 @@ static inline {0} {1}({2}) {{
         private bool stopped = false;
         private Dictionary<ulong, object> targets;
         private ulong targetIdCounter;
+        private Queue<KeyValuePair<ulong, ulong>> valueMemory;
 
         internal class LibRiscVEngine : IScriptEngine
         {
@@ -94,7 +95,8 @@ static inline {0} {1}({2}) {{
             delegates = new Dictionary<string, Delegate>();
             methods = new Dictionary<string, MethodBase>();
             targets = new Dictionary<ulong, object>();
-            targetIdCounter = 1_000_000; // start at 1000000
+            targetIdCounter = 1_000_000_000; // start at 1000000
+            valueMemory = new Queue<KeyValuePair<ulong, ulong>>();
             CreateGlobal("engine", new LibRiscVEngine(this));
             ForwardType("SandboxFunc", typeof(SandboxFunc));
         }
@@ -223,12 +225,14 @@ static inline {0} {1}({2}) {{
                         return MemAllocObject(ret);
                     else
                     {
-                        if (!targets.ContainsValue(ret))
+                        // if (!targets.ContainsValue(ret))
+                        if (!targets.Any(x => ReferenceEquals(x.Value, ret)))
+                        // if (!targets.Values.Any(x => x.IsAlive && x.Target == ret))
                         {
                             targets.Add(targetIdCounter, ret);
                             targetIdCounter++;
                         }
-                        return targets.FirstOrDefault(x => x.Value == ret).Key;
+                        return targets.FirstOrDefault(x => ReferenceEquals(x.Value, ret)).Key;
                     }
                 }
                 else if (methods.TryGetValue(func, out var method))
@@ -273,15 +277,30 @@ static inline {0} {1}({2}) {{
                         }
                     }
                     object target = null;
-                    if (!method.IsStatic && !method.IsConstructor)
+                    // if (!method.IsStatic && !method.IsConstructor)
+                    if (args.target != 0)
                     {
-                        targets.TryGetValue(args.target, out target);
+                        if (targets.TryGetValue(args.target, out target))
+                        {
+                            // if (weak.IsAlive)
+                                // target = weak.Target;
+                            // else
+                                // targets.Remove(args.target);
+                        }
                     }
                     object ret = null;
-                    if (method is ConstructorInfo ctor)
-                        ret = ctor.Invoke(argArr);
-                    else
-                        ret = method.Invoke(target, argArr);
+                    try
+                    {
+                        if (method is ConstructorInfo ctor)
+                            ret = ctor.Invoke(argArr);
+                        else
+                            ret = method.Invoke(target, argArr);
+                    }
+                    catch (TargetException)
+                    {
+                        stdout?.Invoke(method.Name);
+                        throw;
+                    }
                     if (stopped)
                         return 0;
                     if (ret == null)
@@ -294,12 +313,14 @@ static inline {0} {1}({2}) {{
                         return MemAllocObject(ret);
                     else
                     {
-                        if (!targets.ContainsValue(ret))
+                        // if (!targets.ContainsValue(ret))
+                        if (!targets.Any(x => ReferenceEquals(x.Value, ret)))
+                        // if (!targets.Values.Any(x => x.IsAlive && x.Target == ret))
                         {
                             targets.Add(targetIdCounter, ret);
                             targetIdCounter++;
                         }
-                        return targets.FirstOrDefault(x => x.Value == ret).Key;
+                        return targets.FirstOrDefault(x => ReferenceEquals(x.Value, ret)).Key;
                     }
                 }
                 /*
@@ -401,9 +422,11 @@ static inline {0} {1}({2}) {{
 
         public ulong MemAllocObject(object obj)
         {
+            FreeMappedValues();
             if (sandbox == null)
                 return 0;
             ulong objAddr = sandbox.MemMap((ulong)Marshal.SizeOf(obj));
+            valueMemory.Enqueue(new KeyValuePair<ulong, ulong>(objAddr, (ulong)Marshal.SizeOf(obj)));
             if (objAddr == 0)
                 return objAddr;
             sandbox.MemSetObject(objAddr, obj);
@@ -412,9 +435,11 @@ static inline {0} {1}({2}) {{
 
         public ulong MemAllocObject<T>(T obj) where T : unmanaged
         {
+            FreeMappedValues();
             if (sandbox == null)
                 return 0;
             ulong objAddr = sandbox.MemMap((ulong)Marshal.SizeOf<T>());
+            valueMemory.Enqueue(new KeyValuePair<ulong, ulong>(objAddr, (ulong)Marshal.SizeOf<T>()));
             if (objAddr == 0)
                 return objAddr;
             sandbox.MemSetObject(objAddr, obj);
@@ -423,13 +448,29 @@ static inline {0} {1}({2}) {{
 
         public ulong MemAllocString(string str)
         {
+            FreeMappedValues();
             if (sandbox == null)
                 return 0;
             ulong strAddr = sandbox.MemMap((ulong)(str.Length + 1));
+            valueMemory.Enqueue(new KeyValuePair<ulong, ulong>(strAddr, (ulong)(str.Length + 1)));
             if (strAddr == 0)
                 return strAddr;
             sandbox.MemSetString(strAddr, str);
             return strAddr;
+        }
+
+        public void FreeMappedValues()
+        {
+            if (sandbox == null)
+                return;
+            if (valueMemory.Count > 16)
+            {
+                while (valueMemory.Count > 0)
+                {
+                    var kvp = valueMemory.Dequeue();
+                    sandbox.MemUnmap(kvp.Key, kvp.Value);
+                }
+            }
         }
 
         public ulong Jump(ulong addr, params object[] args)
