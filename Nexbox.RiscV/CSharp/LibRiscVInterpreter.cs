@@ -289,18 +289,18 @@ static inline {0} {1}({2}) {{
                         }
                     }
                     object ret = null;
-                    try
+                    // try
                     {
                         if (method is ConstructorInfo ctor)
                             ret = ctor.Invoke(argArr);
                         else
                             ret = method.Invoke(target, argArr);
                     }
-                    catch (TargetException)
-                    {
-                        stdout?.Invoke(method.Name);
-                        throw;
-                    }
+                    // catch (TargetException)
+                    // {
+                    //     stdout?.Invoke(method.Name);
+                    //     throw;
+                    // }
                     if (stopped)
                         return 0;
                     if (ret == null)
