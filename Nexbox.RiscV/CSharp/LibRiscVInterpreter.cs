@@ -401,6 +401,8 @@ static inline {0} {1}({2}) {{
         {
             if (sandbox == null)
                 return default;
+            if (type == typeof(bool))
+                return vaddr != 0;
             if (type == typeof(ulong))
                 return vaddr;
             if (type == typeof(long))
