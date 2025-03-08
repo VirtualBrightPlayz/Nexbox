@@ -406,7 +406,7 @@ static inline {0} {1}({2}) {{
             if (sandbox == null)
                 return default;
             if (type == typeof(bool))
-                return MemGetPtr(vaddr) != 0;
+                return (MemGetPtr(vaddr) & 1) != 0;
             if (type == typeof(ulong))
                 return MemGetPtr(vaddr);
             if (type == typeof(long))
@@ -790,7 +790,7 @@ static inline {0} {1}({2}) {{
             if (type == typeof(float))
                 return "float";
             if (type == typeof(bool))
-                return "char";
+                return "bool";
             headerExportedTypes.Enqueue(type);
             Type nt = Nullable.GetUnderlyingType(type);
             if (nt != null)
