@@ -72,12 +72,14 @@ public class JavaScriptInterpreter : IInterpreter
         {
             if (methodInfo.Name.Contains("Invoke"))
             {
-                List<JsValue> vals = new List<JsValue>();
-                foreach (object o in (List<object>) args)
-                    vals.Add(JsValue.FromObject(engine, o));
+                JsValue[] vals = new JsValue[((object[]) args).Length];
+                for (int i = 0; i < vals.Length; i++)
+                {
+                    vals[i] = JsValue.FromObject(engine, ((object[]) args)[i]);
+                }
                 object[] p = new object[2];
                 p[0] = null;
-                p[1] = vals.ToArray();
+                p[1] = vals;
                 methodInfo.Invoke(func, p);
                 break;
             }

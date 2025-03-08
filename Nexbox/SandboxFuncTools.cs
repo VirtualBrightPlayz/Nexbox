@@ -29,7 +29,7 @@ public static class SandboxFuncTools
                 {
                     a = new Action<object>(args =>
                     {
-                        LuaInterpreter.ClosureToDelegate(lua1).Invoke(((List<object>)args).ToArray());
+                        LuaInterpreter.ClosureToDelegate(lua1).Invoke((object[])args);
                     }),
                 };
             case Func<JsValue, JsValue[], JsValue> js1:
@@ -37,10 +37,12 @@ public static class SandboxFuncTools
                 {
                     a = new Action<object>(args =>
                     {
-                        List<JsValue> vals = new List<JsValue>();
-                        foreach (object o in (List<object>)args)
-                            vals.Add(JsValue.FromObject(JavaScriptInterpreter.activeEngine, o));
-                        js1.Invoke(JsValue.Null, vals.ToArray());
+                        JsValue[] vals = new JsValue[((object[]) args).Length];
+                        for (int i = 0; i < vals.Length; i++)
+                        {
+                            vals[i] = JsValue.FromObject(JavaScriptInterpreter.activeEngine, ((object[]) args)[i]);
+                        }
+                        js1.Invoke(JsValue.Null, vals);
                     }),
                 };
             default:

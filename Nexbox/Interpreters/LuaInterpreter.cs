@@ -149,7 +149,7 @@ public class LuaInterpreter : IInterpreter
         {
             if (methodInfo.Name.Contains("Call"))
             {
-                ((Closure) func).Call(((List<object>) args).ToArray());
+                ((Closure) func).Call((object[]) args);
                 break;
             }
         }

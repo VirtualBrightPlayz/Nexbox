@@ -191,8 +191,7 @@ static inline {0} {1}({2}) {{
 
         public void CallFunction(object func, object args)
         {
-            object[] arg = ((List<object>)args).ToArray();
-            Jump((ulong)func, arg);
+            Jump((ulong)func, (object[])args);
         }
 
         #endregion
@@ -226,14 +225,16 @@ static inline {0} {1}({2}) {{
                         return MemAllocObject(ret);
                     else
                     {
-                        // if (!targets.ContainsValue(ret))
-                        if (!targets.Any(x => ReferenceEquals(x.Value, ret)))
-                        // if (!targets.Values.Any(x => x.IsAlive && x.Target == ret))
+                        foreach (var kvp in targets)
                         {
-                            targets.Add(targetIdCounter, ret);
-                            targetIdCounter++;
+                            if (ReferenceEquals(kvp.Value, ret))
+                            {
+                                return kvp.Key;
+                            }
                         }
-                        return targets.FirstOrDefault(x => ReferenceEquals(x.Value, ret)).Key;
+                        targets.Add(targetIdCounter, ret);
+                        targetIdCounter++;
+                        return targetIdCounter - 1;
                     }
                 }
                 else if (methods.TryGetValue(func, out var method))
@@ -314,14 +315,16 @@ static inline {0} {1}({2}) {{
                         return MemAllocObject(ret);
                     else
                     {
-                        // if (!targets.ContainsValue(ret))
-                        if (!targets.Any(x => ReferenceEquals(x.Value, ret)))
-                        // if (!targets.Values.Any(x => x.IsAlive && x.Target == ret))
+                        foreach (var kvp in targets)
                         {
-                            targets.Add(targetIdCounter, ret);
-                            targetIdCounter++;
+                            if (ReferenceEquals(kvp.Value, ret))
+                            {
+                                return kvp.Key;
+                            }
                         }
-                        return targets.FirstOrDefault(x => ReferenceEquals(x.Value, ret)).Key;
+                        targets.Add(targetIdCounter, ret);
+                        targetIdCounter++;
+                        return targetIdCounter - 1;
                     }
                 }
                 /*

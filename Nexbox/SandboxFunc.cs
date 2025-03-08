@@ -9,7 +9,7 @@ namespace Nexbox;
 public class SandboxFunc
 {
     private IInterpreter e;
-    internal Delegate a;
+    internal Action<object> a;
     
     public SandboxFunc(){}
 
@@ -59,6 +59,6 @@ public class SandboxFunc
     {
         if (e != null && e.IsStopped)
             return;
-        a.DynamicInvoke(args?.ToList() ?? new List<object>());
+        a.Invoke(args);
     }
 }

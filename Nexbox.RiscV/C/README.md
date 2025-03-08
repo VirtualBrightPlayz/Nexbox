@@ -8,8 +8,8 @@
 ```bash
 mkdir build
 cd build
-cmake -T ClangCL ..
-cmake --build .
+cmake -T ClangCL -DCMAKE_BUILD_TYPE=Release ..
+cmake --build . --config Release
 ```
 
 ## Linux
@@ -17,8 +17,8 @@ cmake --build .
 ```bash
 mkdir build
 cd build
-cmake ..
-cmake --build .
+cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake --build . --config Release
 ```
 
 # Compiling Guest/Nexbox Programs
