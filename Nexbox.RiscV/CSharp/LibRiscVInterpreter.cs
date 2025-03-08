@@ -35,11 +35,11 @@ typedef struct {0} {{
         public const string HEADER_STRUCT_PROP = "    {0} {1};";
         public const string HEADER_CLASS_DEF_FWD_DECLARE = "API_OBJECT_FWD_DECLARE({0})\n";
         public const string HEADER_CLASS_DEF_FWD = "API_OBJECT_DECLARE({0})\n";
-        public const string HEADER_CLASS_DEF_FWD_STATIC_FUNC = "API_METHOD_RET_{0}_DECLARE({4}, {1}, {2}, {3})\n";
-        public const string HEADER_CLASS_DEF_FWD_FUNC = "API_OBJECT_METHOD_RET_{0}_DECLARE({4}, {1}, {2}, {3})\n";
+        public const string HEADER_CLASS_DEF_FWD_STATIC_FUNC = "API_METHOD_{0}_DECLARE({4}, {1}, {2}, {3})\n";
+        public const string HEADER_CLASS_DEF_FWD_FUNC = "API_OBJECT_METHOD_{0}_DECLARE({4}, {1}, {2}, {3})\n";
         public const string HEADER_CLASS_DEF = "API_OBJECT_BEGIN({0})\n";
-        public const string HEADER_CLASS_DEF_STATIC_FUNC = "API_METHOD_RET_{0}({4}, {1}, {2}, {3})\n";
-        public const string HEADER_CLASS_DEF_FUNC = "API_OBJECT_METHOD_RET_{0}({4}, {1}, {2}, {3})\n";
+        public const string HEADER_CLASS_DEF_STATIC_FUNC = "API_METHOD_{0}({4}, {1}, {2}, {3})\n";
+        public const string HEADER_CLASS_DEF_FUNC = "API_OBJECT_METHOD_{0}({4}, {1}, {2}, {3})\n";
         public const string HEADER_CLASS_DEF_END = "API_OBJECT_END()\n\n";
         public const string HEADER_CLASS_DEF_FWD_END = "API_OBJECT_DECLARE_END()\n\n";
 
@@ -99,6 +99,7 @@ static inline {0} {1}({2}) {{
             valueMemory = new Queue<KeyValuePair<ulong, ulong>>();
             CreateGlobal("engine", new LibRiscVEngine(this));
             ForwardType("SandboxFunc", typeof(SandboxFunc));
+            ForwardType("LibRiscVEngine", typeof(LibRiscVEngine));
         }
 
         public void CreateGlobal(string name, object global)
@@ -257,13 +258,13 @@ static inline {0} {1}({2}) {{
                         }
                         else if (!mArgs[i].ParameterType.IsValueType)
                         {
-                            if (targets.TryGetValue(ptrArr[i], out var targ))
-                            {
-                                argArr[i] = targ;
-                            }
-                            else if (ptrArr[i] == 0)
+                            if (ptrArr[i] == 0)
                             {
                                 argArr[i] = null;
+                            }
+                            else if (targets.TryGetValue(ptrArr[i], out var targ))
+                            {
+                                argArr[i] = targ;
                             }
                             else
                             {
@@ -272,7 +273,7 @@ static inline {0} {1}({2}) {{
                         }
                         else
                         {
-                            object arg = MemGetObjectFromType(ptrArr[i], mArgs[i].ParameterType);
+                            object arg = MemGetObjectFromType(args.args[i], mArgs[i].ParameterType);
                             argArr[i] = arg;
                         }
                     }
@@ -402,19 +403,19 @@ static inline {0} {1}({2}) {{
             if (sandbox == null)
                 return default;
             if (type == typeof(bool))
-                return vaddr != 0;
+                return MemGetPtr(vaddr) != 0;
             if (type == typeof(ulong))
-                return vaddr;
+                return MemGetPtr(vaddr);
             if (type == typeof(long))
-                return unchecked((long)vaddr);
+                return unchecked((long)MemGetPtr(vaddr));
             if (type == typeof(uint))
-                return unchecked((uint)vaddr);
+                return unchecked((uint)MemGetPtr(vaddr));
             if (type == typeof(int))
-                return unchecked((int)vaddr);
+                return unchecked((int)MemGetPtr(vaddr));
             if (type == typeof(float))
             {
                 Span<ulong> sp = stackalloc ulong[1];
-                sp[0] = vaddr;
+                sp[0] = MemGetPtr(vaddr);
                 return MemoryMarshal.Cast<ulong, float>(sp)[0];
             }
             uint size = (uint)Marshal.SizeOf(type);
@@ -660,19 +661,27 @@ static inline {0} {1}({2}) {{
                             if (!IsBaseCType(margs[i].ParameterType))
                                 deps.Add(margs[i].ParameterType);
                             string fmt = "{0}, _{1}";
-                            if (!IsCValueType(margs[i].ParameterType))
-                                fmt = "{0}*, _{1}";
+                            // if (margs[i].ParameterType.IsValueType)
+                            //     fmt = "{0}*, _{1}";
                             nameAndArgs[i+1] = string.Format(fmt, GetCType(margs[i].ParameterType, false), margs[i].Name);
                         }
                         if (!IsBaseCType(info.ReturnType))
                             deps.Add(info.ReturnType);
                         string ret = GetCType(info.ReturnType, false);
-                        if (!IsCValueType(info.ReturnType))
+                        if (info.ReturnType.IsValueType && info.ReturnType != typeof(void) && info.ReturnType != typeof(float))
                             ret += "*";
                         string funcFmt = info.IsStatic ? HEADER_CLASS_DEF_FWD_STATIC_FUNC : HEADER_CLASS_DEF_FWD_FUNC;
                         if (impl)
                             funcFmt = info.IsStatic ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FUNC;
-                        sb2.Append(string.Format(funcFmt, margs.Length, typename, ret, string.Join(", ", nameAndArgs), info.ReturnType == typeof(float) ? "fpusercall" : "pusercall"));
+                        string pfx = string.Empty;
+                        if (info.ReturnType != typeof(void))
+                            pfx += "RET_";
+                        string call = "pusercall";
+                        if (info.ReturnType == typeof(float))
+                            call = "fpusercall";
+                        else if (IsBaseCValueType(info.ReturnType))
+                            call = "usercall";
+                        sb2.Append(string.Format(funcFmt, pfx + margs.Length, typename, ret, string.Join(", ", nameAndArgs), call));
                     }
                     else if (method.Value is ConstructorInfo ctorInfo && !ctorInfo.IsStatic)
                     {
@@ -684,8 +693,8 @@ static inline {0} {1}({2}) {{
                             if (!IsBaseCType(margs[i].ParameterType))
                                 deps.Add(margs[i].ParameterType);
                             string fmt = "{0}, _{1}";
-                            if (margs[i].ParameterType.IsValueType)
-                                fmt = "{0}*, _{1}";
+                            // if (margs[i].ParameterType.IsValueType)
+                                // fmt = "{0}*, _{1}";
                             nameAndArgs[i+1] = string.Format(fmt, GetCType(margs[i].ParameterType, false), margs[i].Name);
                         }
                         if (!IsBaseCType(ctorInfo.DeclaringType))
@@ -693,7 +702,8 @@ static inline {0} {1}({2}) {{
                         string ret = GetCType(ctorInfo.DeclaringType, false);
                         if (ctorInfo.DeclaringType.IsValueType)
                             ret += "*";
-                        sb2.Append(string.Format(impl ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FWD_STATIC_FUNC, margs.Length, typename, ret, string.Join(", ", nameAndArgs), "pusercall"));
+                        string pfx = "RET_";
+                        sb2.Append(string.Format(impl ? HEADER_CLASS_DEF_STATIC_FUNC : HEADER_CLASS_DEF_FWD_STATIC_FUNC, pfx + margs.Length, typename, ret, string.Join(", ", nameAndArgs), "pusercall"));
                     }
                 }
             }
@@ -765,7 +775,7 @@ static inline {0} {1}({2}) {{
             if (type == typeof(void))
                 return "void";
             if (type == typeof(string))
-                return "char*";
+                return "const char*";
             if (type == typeof(ulong))
                 return "unsigned long long";
             if (type == typeof(long))

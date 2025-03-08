@@ -25,7 +25,7 @@ static inline void* psyscall(long n, const void *arg0, const void *arg1) {
     return (void*)syscall(n, (long)arg0, (long)arg1);
 }
 
-static inline long usercall(const char *func, long arg) {
+static inline long usercall(const char *func, const void *arg) {
     asm("" ::: "memory");
     return (long)syscall(USER_SYSCALL, (long)func, (long)arg);
 }
