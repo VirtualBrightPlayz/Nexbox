@@ -67,11 +67,23 @@ static inline {0} {1}({2}) {{
         private Dictionary<string, Type> modules;
         private Dictionary<string, Func<LibRiscVInterpreter, ulong, ulong>> funcs;
         private Dictionary<string, Delegate> delegates;
-        private Dictionary<string, MethodBase> methods;
+        private Dictionary<string, MethodDataInfo> methods;
         private bool stopped = false;
         private Dictionary<ulong, object> targets;
         private ulong targetIdCounter;
         private Queue<KeyValuePair<ulong, ulong>> valueMemory;
+
+        private struct MethodDataInfo
+        {
+            public MethodBase method;
+            public Type[] parameters;
+
+            public MethodDataInfo(MethodBase m)
+            {
+                method = m;
+                parameters = m.GetParameters().Select(x => x.ParameterType).ToArray();
+            }
+        }
 
         internal class LibRiscVEngine : IScriptEngine
         {
@@ -93,7 +105,7 @@ static inline {0} {1}({2}) {{
             modules = new Dictionary<string, Type>();
             funcs = new Dictionary<string, Func<LibRiscVInterpreter, ulong, ulong>>();
             delegates = new Dictionary<string, Delegate>();
-            methods = new Dictionary<string, MethodBase>();
+            methods = new Dictionary<string, MethodDataInfo>();
             targets = new Dictionary<ulong, object>();
             targetIdCounter = 1_000_000_000; // start at 1000000
             valueMemory = new Queue<KeyValuePair<ulong, ulong>>();
@@ -150,13 +162,13 @@ static inline {0} {1}({2}) {{
                 {
                     string n = $"{module}_{info.Name}";
                     if (info.DeclaringType == type && !methods.ContainsKey(n))
-                        methods.Add(n, info);
+                        methods.Add(n, new MethodDataInfo(info));
                 }
                 foreach (var info in type.GetConstructors(BindingFlags.Public | BindingFlags.Instance))
                 {
                     string n = $"{module}_new_{info.GetParameters().Length}";
                     if (info.DeclaringType == type && !methods.ContainsKey(n))
-                        methods.Add(n, info);
+                        methods.Add(n, new MethodDataInfo(info));
                 }
             }
         }
@@ -204,157 +216,138 @@ static inline {0} {1}({2}) {{
             public fixed ulong args[8];
         }
 
-        private unsafe ulong UserSyscall(string func, ulong vaddr)
+        private unsafe ulong UserSyscall(ulong func, ulong vaddr)
         {
             if (sandbox != null)
             {
-                if (funcs.TryGetValue(func, out var val))
+                byte* funcSpanBytes = sandbox.MemStringCopy(func, out uint funcSpanLen);
+                char* funcSpanChars = stackalloc char[(int)funcSpanLen];
+                Encoding.UTF8.GetChars(funcSpanBytes, (int)funcSpanLen, funcSpanChars, (int)funcSpanLen);
+                Marshal.FreeHGlobal((IntPtr)funcSpanBytes);
+                Span<char> funcSpan = new Span<char>(funcSpanChars, (int)funcSpanLen);
+                foreach (var kvp in funcs)
                 {
-                    return val.Invoke(this, vaddr);
-                }
-                else if (globalObjs.TryGetValue(func, out var obj))
-                {
-                    object ret = obj;
-                    if (stopped)
-                        return 0;
-                    if (ret == null)
-                        return 0;
-                    else if (ret is string str)
-                        return MemAllocString(str);
-                    else if (ret.GetType().IsValueType)
-                        return MemAllocObject(ret);
-                    else
+                    if (funcSpan.SequenceEqual(kvp.Key.AsSpan()))
                     {
-                        foreach (var kvp in targets)
-                        {
-                            if (ReferenceEquals(kvp.Value, ret))
-                            {
-                                return kvp.Key;
-                            }
-                        }
-                        targets.Add(targetIdCounter, ret);
-                        targetIdCounter++;
-                        return targetIdCounter - 1;
+                        return kvp.Value.Invoke(this, vaddr);
                     }
                 }
-                else if (methods.TryGetValue(func, out var method))
+                foreach (var gkvp in globalObjs)
                 {
-                    ParameterInfo[] mArgs = method.GetParameters();
-                    UserArgStruct args = MemGetObject<UserArgStruct>(vaddr);
-                    ulong[] ptrArr = new ulong[mArgs.Length];
-                    for (int i = 0; i < mArgs.Length; i++)
+                    if (funcSpan.SequenceEqual(gkvp.Key.AsSpan()))
                     {
-                        if (args.args[i] == 0)
-                            ptrArr[i] = 0;
+                        object ret = gkvp.Value;
+                        if (stopped)
+                            return 0;
+                        if (ret == null)
+                            return 0;
+                        else if (ret is string str)
+                            return MemAllocString(str);
+                        else if (ret.GetType().IsValueType)
+                            return MemAllocObject(ret);
                         else
-                            ptrArr[i] = MemGetPtr(args.args[i]);
-                    }
-                    object[] argArr = new object[mArgs.Length];
-                    for (int i = 0; i < mArgs.Length; i++)
-                    {
-                        // TODO: add support for arrays
-                        if (mArgs[i].ParameterType == typeof(string))
                         {
-                            argArr[i] = MemGetString(ptrArr[i]);
-                        }
-                        else if (!mArgs[i].ParameterType.IsValueType)
-                        {
-                            if (ptrArr[i] == 0)
+                            foreach (var kvp in targets)
                             {
-                                argArr[i] = null;
+                                if (ReferenceEquals(kvp.Value, ret))
+                                {
+                                    return kvp.Key;
+                                }
                             }
-                            else if (targets.TryGetValue(ptrArr[i], out var targ))
+                            targets.Add(targetIdCounter, ret);
+                            targetIdCounter++;
+                            return targetIdCounter - 1;
+                        }
+                    }
+                }
+                foreach (var mkvp in methods)
+                {
+                    if (funcSpan.SequenceEqual(mkvp.Key.AsSpan()))
+                    {
+                        MethodBase method = mkvp.Value.method;
+                        Type[] mArgs = mkvp.Value.parameters;
+                        UserArgStruct args = MemGetObject<UserArgStruct>(vaddr);
+                        ulong[] ptrArr = new ulong[mArgs.Length];
+                        for (int i = 0; i < mArgs.Length; i++)
+                        {
+                            if (args.args[i] == 0)
+                                ptrArr[i] = 0;
+                            else
+                                ptrArr[i] = MemGetPtr(args.args[i]);
+                        }
+                        object[] argArr = new object[mArgs.Length];
+                        for (int i = 0; i < mArgs.Length; i++)
+                        {
+                            // TODO: add support for arrays
+                            if (mArgs[i] == typeof(string))
                             {
-                                argArr[i] = targ;
+                                argArr[i] = MemGetString(ptrArr[i]);
+                            }
+                            else if (!mArgs[i].IsValueType)
+                            {
+                                if (ptrArr[i] == 0)
+                                {
+                                    argArr[i] = null;
+                                }
+                                else if (targets.TryGetValue(ptrArr[i], out var targ))
+                                {
+                                    argArr[i] = targ;
+                                }
+                                else
+                                {
+                                    argArr[i] = ptrArr[i];
+                                }
                             }
                             else
                             {
-                                argArr[i] = ptrArr[i];
+                                object arg = MemGetObjectFromType(args.args[i], mArgs[i]);
+                                argArr[i] = arg;
                             }
                         }
+                        object target = null;
+                        if (args.target != 0)
+                        {
+                            targets.TryGetValue(args.target, out target);
+                        }
+                        object ret = null;
+                        // try
+                        {
+                            if (method is ConstructorInfo ctor)
+                                ret = ctor.Invoke(argArr);
+                            else
+                                ret = method.Invoke(target, argArr);
+                        }
+                        // catch (TargetException)
+                        // {
+                        //     stdout?.Invoke(method.Name);
+                        //     throw;
+                        // }
+                        if (stopped)
+                            return 0;
+                        if (ret == null)
+                            return 0;
+                        else if (ret is string str)
+                            return MemAllocString(str);
+                        else if (ret is float fl)
+                            return sandbox.StackPushFloat(fl);
+                        else if (ret.GetType().IsValueType)
+                            return MemAllocObject(ret);
                         else
                         {
-                            object arg = MemGetObjectFromType(args.args[i], mArgs[i].ParameterType);
-                            argArr[i] = arg;
-                        }
-                    }
-                    object target = null;
-                    // if (!method.IsStatic && !method.IsConstructor)
-                    if (args.target != 0)
-                    {
-                        if (targets.TryGetValue(args.target, out target))
-                        {
-                            // if (weak.IsAlive)
-                                // target = weak.Target;
-                            // else
-                                // targets.Remove(args.target);
-                        }
-                    }
-                    object ret = null;
-                    // try
-                    {
-                        if (method is ConstructorInfo ctor)
-                            ret = ctor.Invoke(argArr);
-                        else
-                            ret = method.Invoke(target, argArr);
-                    }
-                    // catch (TargetException)
-                    // {
-                    //     stdout?.Invoke(method.Name);
-                    //     throw;
-                    // }
-                    if (stopped)
-                        return 0;
-                    if (ret == null)
-                        return 0;
-                    else if (ret is string str)
-                        return MemAllocString(str);
-                    else if (ret is float fl)
-                        return sandbox.StackPushFloat(fl);
-                    else if (ret.GetType().IsValueType)
-                        return MemAllocObject(ret);
-                    else
-                    {
-                        foreach (var kvp in targets)
-                        {
-                            if (ReferenceEquals(kvp.Value, ret))
+                            foreach (var kvp in targets)
                             {
-                                return kvp.Key;
+                                if (ReferenceEquals(kvp.Value, ret))
+                                {
+                                    return kvp.Key;
+                                }
                             }
+                            targets.Add(targetIdCounter, ret);
+                            targetIdCounter++;
+                            return targetIdCounter - 1;
                         }
-                        targets.Add(targetIdCounter, ret);
-                        targetIdCounter++;
-                        return targetIdCounter - 1;
                     }
                 }
-                /*
-                else if (delegates.TryGetValue(func, out var delg))
-                {
-                    object target = delg.Target;
-                    MethodInfo dmethod = delg.Method;
-                    ParameterInfo[] mArgs = dmethod.GetParameters();
-                    UserArgStruct args = MemGetObject<UserArgStruct>(vaddr);
-                    object[] argArr = new object[mArgs.Length];
-                    argArr[0] = this;
-                    for (int i = 1; i < mArgs.Length; i++)
-                    {
-                        object arg = MemGetObjectFromType(args.args[i-1], mArgs[i].ParameterType);
-                        argArr[i] = arg;
-                    }
-                    object ret = dmethod.Invoke(target, argArr);
-                    if (stopped)
-                        return 0;
-                    if (ret == null)
-                        return 0;
-                    else if (ret is string str)
-                        return MemAllocString(str);
-                    else if (ret.GetType().IsValueType)
-                        return MemAllocObject(ret);
-                    else
-                        return 0; // not supported as of now
-                }
-                */
-                throw new Exception($"User System Call not found: {func}");
+                throw new Exception($"User System Call not found: {funcSpan.ToString()}");
             }
             return 0;
         }
@@ -537,7 +530,7 @@ static inline {0} {1}({2}) {{
             }
             foreach (var kvp in methods)
             {
-                ExportHeaderFunction(kvp.Key, kvp.Value);
+                ExportHeaderFunction(kvp.Key, kvp.Value.method);
                 // body.Append(ExportHeaderFunction(kvp.Key, kvp.Value));
             }
 
@@ -616,11 +609,11 @@ static inline {0} {1}({2}) {{
             List<Type> deps = new List<Type>();
             foreach (var method in methods)
             {
-                if (method.Value.DeclaringType == type)
+                if (method.Value.method.DeclaringType == type)
                 {
-                    if (method.Value is MethodInfo info)
+                    if (method.Value.method is MethodInfo info)
                     {
-                        ParameterInfo[] margs = method.Value.GetParameters();
+                        ParameterInfo[] margs = method.Value.method.GetParameters();
                         for (int i = 0; i < margs.Length; i++)
                         {
                             if (!IsBaseCType(margs[i].ParameterType))
@@ -629,9 +622,9 @@ static inline {0} {1}({2}) {{
                         if (!IsBaseCType(info.ReturnType))
                             deps.Add(info.ReturnType);
                     }
-                    else if (method.Value is ConstructorInfo ctorInfo && !ctorInfo.IsStatic)
+                    else if (method.Value.method is ConstructorInfo ctorInfo && !ctorInfo.IsStatic)
                     {
-                        ParameterInfo[] margs = method.Value.GetParameters();
+                        ParameterInfo[] margs = method.Value.method.GetParameters();
                         for (int i = 0; i < margs.Length; i++)
                         {
                             if (!IsBaseCType(margs[i].ParameterType))
@@ -652,13 +645,13 @@ static inline {0} {1}({2}) {{
             sb2.Append(string.Format(impl ? HEADER_CLASS_DEF : HEADER_CLASS_DEF_FWD, typename));
             foreach (var method in methods)
             {
-                if (method.Value.DeclaringType == type)
+                if (method.Value.method.DeclaringType == type)
                 {
-                    if (method.Value is MethodInfo info)
+                    if (method.Value.method is MethodInfo info)
                     {
-                        ParameterInfo[] margs = method.Value.GetParameters();
+                        ParameterInfo[] margs = method.Value.method.GetParameters();
                         string[] nameAndArgs = new string[margs.Length + 1];
-                        nameAndArgs[0] = method.Value.Name;
+                        nameAndArgs[0] = method.Value.method.Name;
                         for (int i = 0; i < margs.Length; i++)
                         {
                             if (!IsBaseCType(margs[i].ParameterType))
@@ -686,9 +679,9 @@ static inline {0} {1}({2}) {{
                             call = "usercall";
                         sb2.Append(string.Format(funcFmt, pfx + margs.Length, typename, ret, string.Join(", ", nameAndArgs), call));
                     }
-                    else if (method.Value is ConstructorInfo ctorInfo && !ctorInfo.IsStatic)
+                    else if (method.Value.method is ConstructorInfo ctorInfo && !ctorInfo.IsStatic)
                     {
-                        ParameterInfo[] margs = method.Value.GetParameters();
+                        ParameterInfo[] margs = method.Value.method.GetParameters();
                         string[] nameAndArgs = new string[margs.Length + 1];
                         nameAndArgs[0] = "new_" + margs.Length;
                         for (int i = 0; i < margs.Length; i++)

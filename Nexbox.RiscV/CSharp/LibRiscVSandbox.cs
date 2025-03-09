@@ -14,7 +14,7 @@ namespace LibRiscV
         private Func<string> stdin;
         private Action<string> stdout;
         private Action<int, string, long> stderr;
-        private Func<string, ulong, ulong> UserSyscall;
+        private Func<ulong, ulong, ulong> UserSyscall;
         private Queue<byte> stdinCache = new Queue<byte>();
         private GCHandle handle;
         private bool stopped;
@@ -157,13 +157,13 @@ namespace LibRiscV
             LibRiscVSandbox sandbox = handle.Target as LibRiscVSandbox;
             const int REG_A0 = 10;
             const int REG_A1 = 11;
-            ulong a0 = sandbox.UserSyscall?.Invoke(sandbox.MemString(regs->r[REG_A0]), regs->r[REG_A1]) ?? 0;
+            ulong a0 = sandbox.UserSyscall?.Invoke(regs->r[REG_A0], regs->r[REG_A1]) ?? 0;
             // *regs = prevRegs;
             *ctPtr = prevCtPtr;
             regs->r[REG_A0] = a0;
         }
 
-        public LibRiscVSandbox(byte[] elf, Func<string> stdi = null, Action<string> stdo = null, Action<int, string, long> stde = null, Func<string, ulong, ulong> user = null, params string[] args)
+        public LibRiscVSandbox(byte[] elf, Func<string> stdi = null, Action<string> stdo = null, Action<int, string, long> stde = null, Func<ulong, ulong, ulong> user = null, params string[] args)
         {
             stdin = stdi;
             stdout = stdo;
@@ -242,7 +242,18 @@ namespace LibRiscV
             IntPtr ptr = (IntPtr)LibRiscVNative.libriscv_memstring(machine, src, 1000, ref len);
             if (ptr == IntPtr.Zero)
                 return null;
-            return Marshal.PtrToStringAnsi(ptr, (int)len);
+            string str = Marshal.PtrToStringAnsi(ptr, (int)len);
+            Marshal.FreeHGlobal(ptr);
+            return str;
+        }
+
+        public byte* MemStringCopy(ulong src, out uint len)
+        {
+            len = 0;
+            if (machine == null || stopped)
+                return default;
+            IntPtr ptr = (IntPtr)LibRiscVNative.libriscv_memstring(machine, src, 1000, ref len);
+            return (byte*)ptr.ToPointer();
         }
 
         public float MemFloat(ulong src)
