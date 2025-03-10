@@ -243,7 +243,6 @@ namespace LibRiscV
             if (ptr == IntPtr.Zero)
                 return null;
             string str = Marshal.PtrToStringAnsi(ptr, (int)len);
-            Marshal.FreeHGlobal(ptr);
             return str;
         }
 

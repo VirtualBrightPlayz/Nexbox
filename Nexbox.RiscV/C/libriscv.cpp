@@ -268,20 +268,16 @@ int libriscv_copy_from_guest(RISCVMachine *m, void* dst, uint64_t src, unsigned 
 }
 
 extern "C"
-char * libriscv_memstring(RISCVMachine *m, uint64_t src, unsigned maxlen, unsigned* length)
+const char * libriscv_memstring(RISCVMachine *m, uint64_t src, unsigned maxlen, unsigned* length)
 {
 	if (length == nullptr)
 		return nullptr;
 	char *result = nullptr;
 
 	try {
-		const unsigned len = MACHINE(m)->memory.strlen(src, maxlen);
-		result = (char *)std::malloc(len);
-		if (result != nullptr) {
-			MACHINE(m)->copy_from_guest(result, src, len);
-			*length = len;
-		}
-		return result;
+		const auto view = MACHINE(m)->memory.memstring_view(src, maxlen);
+		*length = view.size();
+		return view.data();
 	} catch (const MachineException& me) {
 		ERROR_CALLBACK(MACHINE(m), RISCV_ERROR_TYPE_MACHINE_EXCEPTION, me.what(), me.data());
 	} catch (const std::exception& e) {
@@ -298,7 +294,7 @@ extern "C"
 const char * libriscv_memview(RISCVMachine *m, uint64_t src, unsigned length)
 {
 	try {
-		auto buffer = MACHINE(m)->memory.rvbuffer(src, length);
+		auto buffer = MACHINE(m)->memory.membuffer(src, length);
 		if (buffer.is_sequential()) {
 			return buffer.data();
 		}

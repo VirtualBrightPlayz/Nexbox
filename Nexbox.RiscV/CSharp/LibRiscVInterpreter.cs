@@ -24,6 +24,11 @@ typedef struct {
     void* target;
     void* args[8];
 } UserArgStruct;
+
+typedef struct CArray {
+    int length;
+    void* data;
+} CArray;
 ";
 
         public const string HEADER_STRUCT_DEF = @"
@@ -216,6 +221,50 @@ static inline {0} {1}({2}) {{
             public fixed ulong args[8];
         }
 
+        private struct CArray
+        {
+            public int Length;
+            public ulong Data;
+        }
+
+        private unsafe object ConvertArg(ulong argAddr, Type argType)
+        {
+            if (argType == typeof(string))
+            {
+                return MemGetString(MemGetPtr(argAddr));
+            }
+            else if (argType.IsArray)
+            {
+                CArray cArray = (CArray)MemGetObjectFromType(argAddr, typeof(CArray));
+                Array arr = Array.CreateInstance(argType.GetElementType(), cArray.Length);
+                for (uint i = 0; i < cArray.Length; i++)
+                {
+                    object data = ConvertArg(cArray.Data + i * (uint)Marshal.SizeOf(argType.GetElementType()), argType.GetElementType());
+                    arr.SetValue(data, i);
+                }
+                return arr;
+            }
+            else if (!argType.IsValueType)
+            {
+                if (MemGetPtr(argAddr) == 0)
+                {
+                    return null;
+                }
+                else if (targets.TryGetValue(MemGetPtr(argAddr), out var targ))
+                {
+                    return targ;
+                }
+                else
+                {
+                    return MemGetPtr(argAddr);
+                }
+            }
+            else
+            {
+                return MemGetObjectFromType(argAddr, argType);
+            }
+        }
+
         private unsafe ulong UserSyscall(ulong func, ulong vaddr)
         {
             if (sandbox != null)
@@ -223,7 +272,7 @@ static inline {0} {1}({2}) {{
                 byte* funcSpanBytes = sandbox.MemStringCopy(func, out uint funcSpanLen);
                 char* funcSpanChars = stackalloc char[(int)funcSpanLen];
                 Encoding.UTF8.GetChars(funcSpanBytes, (int)funcSpanLen, funcSpanChars, (int)funcSpanLen);
-                Marshal.FreeHGlobal((IntPtr)funcSpanBytes);
+                // Marshal.FreeHGlobal((IntPtr)funcSpanBytes);
                 Span<char> funcSpan = new Span<char>(funcSpanChars, (int)funcSpanLen);
                 foreach (var kvp in funcs)
                 {
@@ -270,14 +319,16 @@ static inline {0} {1}({2}) {{
                         ulong[] ptrArr = new ulong[mArgs.Length];
                         for (int i = 0; i < mArgs.Length; i++)
                         {
-                            if (args.args[i] == 0)
-                                ptrArr[i] = 0;
-                            else
-                                ptrArr[i] = MemGetPtr(args.args[i]);
+                            // if (args.args[i] == 0)
+                            //     ptrArr[i] = 0;
+                            // else
+                            //     ptrArr[i] = MemGetPtr(args.args[i]);
                         }
                         object[] argArr = new object[mArgs.Length];
                         for (int i = 0; i < mArgs.Length; i++)
                         {
+                            argArr[i] = ConvertArg(args.args[i], mArgs[i]);
+                            continue;
                             // TODO: add support for arrays
                             if (mArgs[i] == typeof(string))
                             {
@@ -664,7 +715,7 @@ static inline {0} {1}({2}) {{
                         if (!IsBaseCType(info.ReturnType))
                             deps.Add(info.ReturnType);
                         string ret = GetCType(info.ReturnType, false);
-                        if (info.ReturnType.IsValueType && info.ReturnType != typeof(void) && info.ReturnType != typeof(float))
+                        if ((info.ReturnType.IsValueType || info.ReturnType.IsArray) && info.ReturnType != typeof(void) && info.ReturnType != typeof(float))
                             ret += "*";
                         string funcFmt = info.IsStatic ? HEADER_CLASS_DEF_FWD_STATIC_FUNC : HEADER_CLASS_DEF_FWD_FUNC;
                         if (impl)
@@ -761,7 +812,7 @@ static inline {0} {1}({2}) {{
             else if (info is MethodInfo info2)
                 retType = info2.ReturnType;
             string ret = GetCType(retType);
-            if (IsBaseCValueType(retType))
+            if (IsBaseCValueType(retType) || retType.IsArray)
                 ret += "*";
             return string.Format(HEADER_FUNC_RET, ret, name, string.Join(", ", args), string.Join("\n", code), ret == "void" ? "" : $"return ({ret})");
         }
@@ -789,7 +840,8 @@ static inline {0} {1}({2}) {{
             if (nt != null)
                 return GetCType(nt);
             if (type.IsArray)
-                return GetCType(type.GetElementType()) + "*";
+                return "CArray";
+                // return GetCType(type.GetElementType()) + "*";
             foreach (var mod in modules)
             {
                 if (mod.Value == type)
