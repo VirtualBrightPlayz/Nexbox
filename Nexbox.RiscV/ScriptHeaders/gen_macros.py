@@ -1,4 +1,4 @@
-def gen_api_method_declare(m, n, pfx):
+def gen_api_method_declare_cpp(m, n, pfx):
     s = ["call", "type", "ret", "name"]
     arg = []
     for i in range(n):
@@ -7,7 +7,7 @@ def gen_api_method_declare(m, n, pfx):
         arg.append(f"type{i} name{i}")
     return f"#define {m}_{n}_DECLARE({", ".join(s)}) {pfx}inline ret name({", ".join(arg)});"
 
-def gen_api_method(m, n, r, body):
+def gen_api_method_cpp(m, n, r, body):
     s = ["call", "type", "ret", "name"]
     arg = []
     for i in range(n):
@@ -17,6 +17,32 @@ def gen_api_method(m, n, r, body):
         body.append(f"args.args[{i}] = (void*)&name{i};")
     return f"""#define {m}_{n}({", ".join(s)}) \\
 inline ret type::name({", ".join(arg)}) {{ \\
+    UserArgStruct args; \\
+    {" \\\n    ".join(body)} \\
+    {r}call(#type "_" #name, &args); \\
+}}"""
+
+def gen_api_method_declare_c(m, n, pfx):
+    s = ["call", "type", "ret", "name"]
+    arg = []
+    for i in range(n):
+        s.append(f"type{i}")
+        s.append(f"name{i}")
+        arg.append(f"type{i} name{i}")
+    return f"#define {m}_{n}_DECLARE({", ".join(s)})"
+
+def gen_api_method_c(m, n, pfx, r, body):
+    s = ["call", "type", "ret", "name"]
+    arg = []
+    if len(body) != 0:
+        arg = ["type targ"]
+    for i in range(n):
+        s.append(f"type{i}")
+        s.append(f"name{i}")
+        arg.append(f"type{i} name{i}")
+        body.append(f"args.args[{i}] = (void*)&name{i};")
+    return f"""#define {m}_{n}({", ".join(s)}) \\
+{pfx}inline ret type##_##name({", ".join(arg)}) {{ \\
     UserArgStruct args; \\
     {" \\\n    ".join(body)} \\
     {r}call(#type "_" #name, &args); \\
@@ -43,28 +69,67 @@ print("""#ifndef MACROLIB_H
 #define API_OBJECT_END()
 """)
 for i in range(8):
-    print(gen_api_method_declare("API_METHOD", i, "static "))
+    print(gen_api_method_declare_cpp("API_METHOD", i, "static "))
 print("")
 for i in range(8):
-    print(gen_api_method_declare("API_METHOD_RET", i, "static "))
+    print(gen_api_method_declare_cpp("API_METHOD_RET", i, "static "))
 print("")
 for i in range(8):
-    print(gen_api_method_declare("API_OBJECT_METHOD", i, ""))
+    print(gen_api_method_declare_cpp("API_OBJECT_METHOD", i, ""))
 print("")
 for i in range(8):
-    print(gen_api_method_declare("API_OBJECT_METHOD_RET", i, ""))
+    print(gen_api_method_declare_cpp("API_OBJECT_METHOD_RET", i, ""))
 print("")
 for i in range(8):
-    print(gen_api_method("API_METHOD", i, "", []))
+    print(gen_api_method_cpp("API_METHOD", i, "", []))
 print("")
 for i in range(8):
-    print(gen_api_method("API_METHOD_RET", i, "return (ret)", []))
+    print(gen_api_method_cpp("API_METHOD_RET", i, "return (ret)", []))
 print("")
 for i in range(8):
-    print(gen_api_method("API_OBJECT_METHOD", i, "", ["args.target = (void*)this->addr;"]))
+    print(gen_api_method_cpp("API_OBJECT_METHOD", i, "", ["args.target = (void*)this->addr;"]))
 print("")
 for i in range(8):
-    print(gen_api_method("API_OBJECT_METHOD_RET", i, "return (ret)", ["args.target = (void*)this->addr;"]))
+    print(gen_api_method_cpp("API_OBJECT_METHOD_RET", i, "return (ret)", ["args.target = (void*)this->addr;"]))
+print("""
+#else
+
+#define bool unsigned char
+
+#define API_OBJECT_FWD_DECLARE(name) typedef void* name;
+
+#define API_OBJECT_DECLARE(name)
+#define API_OBJECT_DECLARE_END()
+
+#define API_OBJECT_BEGIN(name)
+#define API_OBJECT_END()
+
+""")
+
+for i in range(8):
+    print(gen_api_method_declare_c("API_METHOD", i, "static "))
+print("")
+for i in range(8):
+    print(gen_api_method_declare_c("API_METHOD_RET", i, "static "))
+print("")
+for i in range(8):
+    print(gen_api_method_declare_c("API_OBJECT_METHOD", i, ""))
+print("")
+for i in range(8):
+    print(gen_api_method_declare_c("API_OBJECT_METHOD_RET", i, ""))
+print("")
+for i in range(8):
+    print(gen_api_method_c("API_METHOD", i, "", "", []))
+print("")
+for i in range(8):
+    print(gen_api_method_c("API_METHOD_RET", i, "", "return (ret)", []))
+print("")
+for i in range(8):
+    print(gen_api_method_c("API_OBJECT_METHOD", i, "", "", ["args.target = targ;"]))
+print("")
+for i in range(8):
+    print(gen_api_method_c("API_OBJECT_METHOD_RET", i, "", "return (ret)", ["args.target = targ;"]))
+
 print("""
 #endif
 
