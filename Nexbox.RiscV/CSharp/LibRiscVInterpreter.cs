@@ -77,7 +77,7 @@ static inline {0} {1}({2}) {{
         private Dictionary<ulong, object> targets;
         private ulong targetIdCounter;
         private Queue<KeyValuePair<ulong, ulong>> valueMemory;
-        private bool isYielding = false;
+        private int isYielding = 0;
 
         private struct MethodDataInfo
         {
@@ -125,7 +125,7 @@ static inline {0} {1}({2}) {{
             targets = new Dictionary<ulong, object>();
             targetIdCounter = 1_000_000_000; // start at 1000000
             valueMemory = new Queue<KeyValuePair<ulong, ulong>>();
-            isYielding = false;
+            isYielding = 0;
             CreateGlobal("engine", new LibRiscVEngine(this));
             ForwardType("SandboxFunc", typeof(SandboxFunc));
             ForwardType("LibRiscVEngine", typeof(LibRiscVEngine));
@@ -208,7 +208,6 @@ static inline {0} {1}({2}) {{
         {
             if (sandbox != null)
             {
-                isYielding = false;
                 sandbox.Pause();
             }
         }
@@ -217,7 +216,7 @@ static inline {0} {1}({2}) {{
         {
             if (sandbox != null)
             {
-                isYielding = true;
+                isYielding++;
                 sandbox.Pause();
             }
         }
@@ -246,9 +245,12 @@ static inline {0} {1}({2}) {{
 
         public void CallFunction(object func, object args)
         {
-            if (isYielding)
+            if (isYielding > 0)
+            {
                 Resume();
-            Jump((ulong)func, !isYielding, (object[])args);
+                isYielding--;
+            }
+            Jump((ulong)func, (object[])args);
         }
 
         #endregion
@@ -563,11 +565,11 @@ static inline {0} {1}({2}) {{
             }
         }
 
-        public ulong Jump(ulong addr, bool resetStack, params object[] args)
+        public ulong Jump(ulong addr, params object[] args)
         {
             if (sandbox == null)
                 return 0;
-            if (sandbox.CallPtr(addr, out long ret, resetStack, args))
+            if (sandbox.CallPtr(addr, out long ret, args))
             {
                 return unchecked((ulong)ret);
             }

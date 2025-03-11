@@ -10,12 +10,15 @@
 void do_work() {
     while (true) {
         printf("test\n");
-        char buffer[BUFSIZ];
+        // char buffer[BUFSIZ];
         // fgets(buffer, BUFSIZ, stdin);
         // printf(buffer);
-        // fflush(stdout);
-        LibRiscVEngine_Exit(get_engine());
+        fflush(stdout);
+        LibRiscVEngine_Yield(get_engine());
     }
+}
+
+PUBLIC void dummy() {
 }
 
 int main() {
@@ -24,9 +27,13 @@ int main() {
     //     printf("failed to make pipe\n");
     //     return 1;
     // }
+    SandboxFunc func = SandboxFunc_new_1(get_engine());
+    SandboxFunc_SetAction(func, (void*)&dummy);
+    tools_SetTick(func);
     pthread_t thread;
     pthread_create(&thread, NULL, &do_work, NULL);
     LibRiscVEngine_Exit(get_engine());
-    pthread_join(thread, NULL);
+    // pthread_join(thread, NULL);
+    printf("bad\n");
     return 0;
 }

@@ -239,16 +239,39 @@ int libriscv_jump(RISCVMachine *m, uint64_t address)
 	return RISCV_ERROR_TYPE_GENERAL_EXCEPTION;
 }
 extern "C"
-int libriscv_setup_vmcall(RISCVMachine *m, uint64_t address, uint8_t reset_stack)
+int libriscv_setup_vmcall(RISCVMachine *m, uint64_t address)
 {
 	try {
 		auto* machine = MACHINE(m);
-		if (reset_stack != 0) {
-			machine->cpu.reset_stack_pointer();
-		}
+		machine->cpu.reset_stack_pointer();
 		machine->reset_instruction_counter();
 		machine->setup_call();
 		machine->cpu.jump(address);
+		return 0;
+	} catch (const MachineException& me) {
+		ERROR_CALLBACK(MACHINE(m), RISCV_ERROR_TYPE_MACHINE_EXCEPTION, me.what(), me.data());
+		return RISCV_ERROR_TYPE_MACHINE_EXCEPTION;
+	} catch (const std::exception& e) {
+		ERROR_CALLBACK(MACHINE(m), RISCV_ERROR_TYPE_GENERAL_EXCEPTION, e.what(), 0);
+	}
+	return RISCV_ERROR_TYPE_GENERAL_EXCEPTION;
+}
+extern "C"
+RISCVRegisters *libriscv_setup_preempt(RISCVMachine *m)
+{
+	auto* machine = MACHINE(m);
+	auto regs = machine->cpu.registers();
+	// we need to make some stack room
+	machine->cpu.reg(REG_SP) -= 16u;
+	machine->setup_call();
+	return (RISCVRegisters *)&regs;
+}
+extern "C"
+int libriscv_preempt(RISCVMachine *m, RISCVRegisters *regs, uint64_t address, uint64_t instruction_limit)
+{
+	try {
+		auto* machine = MACHINE(m);
+		machine->cpu.preempt_internal(*(riscv::Registers<RISCV_ARCH>*)regs, false, true, address, instruction_limit);
 		return 0;
 	} catch (const MachineException& me) {
 		ERROR_CALLBACK(MACHINE(m), RISCV_ERROR_TYPE_MACHINE_EXCEPTION, me.what(), me.data());
