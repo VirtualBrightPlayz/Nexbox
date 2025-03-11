@@ -18,6 +18,7 @@ namespace LibRiscV
         private Queue<byte> stdinCache = new Queue<byte>();
         private GCHandle handle;
         private bool stopped;
+        private int callIter = 0;
         private static LibRiscVNative.riscv_error_func_t g_stderr;
         private static LibRiscVNative.riscv_stdin_func_t g_stdin;
         private static LibRiscVNative.riscv_stdout_func_t g_stdout;
@@ -217,19 +218,27 @@ namespace LibRiscV
             if (machine == null)
                 return false;
             stopped = false;
-            int re = LibRiscVNative.libriscv_run(machine, MAX_INSTRUCTIONS);
-            if (re == 0)
+            callIter++;
+            try
             {
-                ret = 0;
+                int re = LibRiscVNative.libriscv_run(machine, MAX_INSTRUCTIONS);
+                if (re == 0)
+                {
+                    ret = 0;
+                    return true;
+                }
+                if (LibRiscVNative.libriscv_instruction_limit_reached(machine) != 0)
+                {
+                    ret = 0;
+                    return false;
+                }
+                ret = LibRiscVNative.libriscv_return_value(machine);
                 return true;
             }
-            if (LibRiscVNative.libriscv_instruction_limit_reached(machine) != 0)
+            finally
             {
-                ret = 0;
-                return false;
+                callIter--;
             }
-            ret = LibRiscVNative.libriscv_return_value(machine);
-            return true;
         }
 
         public void Stop()
@@ -411,16 +420,16 @@ namespace LibRiscV
             }
         }
 
-        public bool Call(string funcName, out long ret, bool resetStack, params object[] args)
+        public bool Call(string funcName, out long ret, params object[] args)
         {
             ret = 0;
             if (machine == null || stopped)
                 return false;
             ulong vaddr = LibRiscVNative.libriscv_address_of(machine, funcName);
-            return CallPtr(vaddr, out ret, resetStack, args);
+            return CallPtr(vaddr, out ret, args);
         }
 
-        public bool CallPtr(ulong vaddr, out long ret, bool resetStack, params object[] args)
+        public bool CallPtr(ulong vaddr, out long ret, params object[] args)
         {
             ret = 0;
             if (machine == null || stopped)
@@ -434,28 +443,49 @@ namespace LibRiscV
             ulong prevCtPtr = *ctPtr;
             LibRiscVNative.RISCVRegisters *regs = LibRiscVNative.libriscv_get_registers(machine);
             LibRiscVNative.RISCVRegisters prevRegs = *regs;
-            if (LibRiscVNative.libriscv_setup_vmcall(machine, vaddr, (byte)(resetStack ? 1 : 0)) == 0)
+            callIter++;
+            try
             {
-                for (int i = 0, j = 0; i < args.Length; i++)
+                if (callIter > 1)
                 {
-                    Convert(regs, i, args[i], ref j);
+                    LibRiscVNative.libriscv_setup_preempt(machine);
+                    for (int i = 0, j = 0; i < args.Length; i++)
+                    {
+                        Convert(regs, i, args[i], ref j);
+                    }
+                    LibRiscVNative.libriscv_preempt(machine, regs, vaddr, MAX_INSTRUCTIONS);
+                    if (machine == null || stopped)
+                        return false;
+                    ret = LibRiscVNative.libriscv_return_value(machine);
+                    *regs = prevRegs;
+                    *ctPtr = prevCtPtr;
+                    return true;
                 }
-                LibRiscVNative.libriscv_resume(machine, MAX_INSTRUCTIONS);
-                LibRiscVNative.libriscv_stop(machine);
-                if (machine == null || stopped)
+                else if (LibRiscVNative.libriscv_setup_vmcall(machine, vaddr) == 0)
+                {
+                    for (int i = 0, j = 0; i < args.Length; i++)
+                    {
+                        Convert(regs, i, args[i], ref j);
+                    }
+                    LibRiscVNative.libriscv_resume(machine, MAX_INSTRUCTIONS);
+                    if (machine == null || stopped)
+                        return false;
+                    ret = LibRiscVNative.libriscv_return_value(machine);
+                    *regs = prevRegs;
+                    *ctPtr = prevCtPtr;
+                    return true;
+                }
+                else
+                {
+                    // unable to jump to function at vaddr, restore last state
+                    *regs = prevRegs;
+                    *ctPtr = prevCtPtr;
                     return false;
-                ret = LibRiscVNative.libriscv_return_value(machine);
-                // Unsafe.Copy(regs, ref prevRegs);
-                *regs = prevRegs;
-                *ctPtr = prevCtPtr;
-                return true;
+                }
             }
-            else
+            finally
             {
-                // unable to jump to function at vaddr, restore last state
-                *regs = prevRegs;
-                *ctPtr = prevCtPtr;
-                return false;
+                callIter--;
             }
         }
 
