@@ -123,6 +123,23 @@ int libriscv_run(RISCVMachine *m, uint64_t instruction_limit)
 	}
 }
 extern "C"
+int libriscv_resume(RISCVMachine *m, uint64_t instruction_limit)
+{
+	try {
+		auto& machine = *MACHINE(m);
+		return machine.resume<false>(instruction_limit) ? 0 : -RISCV_ERROR_TYPE_MACHINE_TIMEOUT;
+	} catch (const MachineTimeoutException& tmo) {
+		ERROR_CALLBACK(MACHINE(m), RISCV_ERROR_TYPE_MACHINE_TIMEOUT, tmo.what(), tmo.data());
+		return RISCV_ERROR_TYPE_MACHINE_TIMEOUT;
+	} catch (const MachineException& me) {
+		ERROR_CALLBACK(MACHINE(m), RISCV_ERROR_TYPE_MACHINE_EXCEPTION, me.what(), me.data());
+		return RISCV_ERROR_TYPE_MACHINE_EXCEPTION;
+	} catch (const std::exception& e) {
+		ERROR_CALLBACK(MACHINE(m), RISCV_ERROR_TYPE_GENERAL_EXCEPTION, e.what(), 0);
+		return RISCV_ERROR_TYPE_GENERAL_EXCEPTION;
+	}
+}
+extern "C"
 const char * libriscv_strerror(int return_value)
 {
 	switch (return_value) {
@@ -226,6 +243,7 @@ int libriscv_setup_vmcall(RISCVMachine *m, uint64_t address)
 	try {
 		auto* machine = MACHINE(m);
 		machine->cpu.reset_stack_pointer();
+		machine->reset_instruction_counter();
 		machine->setup_call();
 		machine->cpu.jump(address);
 		return 0;

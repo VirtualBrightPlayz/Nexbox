@@ -52,6 +52,7 @@ LIBRISCVAPI int libriscv_delete(RISCVMachine *m);
 /* Start execution at current PC, with the given instruction limit. 0 on success.
    When an error occurs, the negative value is one of the RISCV_ERROR_ enum values. */
 LIBRISCVAPI int libriscv_run(RISCVMachine *m, uint64_t instruction_limit);
+LIBRISCVAPI int libriscv_resume(RISCVMachine *m, uint64_t instruction_limit);
 
 /* Returns a string describing a negative return value. */
 LIBRISCVAPI const char * libriscv_strerror(int return_value);

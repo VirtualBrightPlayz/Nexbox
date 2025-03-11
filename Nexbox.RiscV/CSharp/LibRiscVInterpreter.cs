@@ -94,6 +94,11 @@ static inline {0} {1}({2}) {{
         {
             internal LibRiscVInterpreter e;
             internal LibRiscVEngine(LibRiscVInterpreter e) => this.e = e;
+
+            public void Exit()
+            {
+                e.sandbox.Exit();
+            }
         }
 
         #region APIs
@@ -476,9 +481,9 @@ static inline {0} {1}({2}) {{
             if (sandbox == null)
                 return 0;
             ulong objAddr = sandbox.MemMap((ulong)Marshal.SizeOf(obj));
-            valueMemory.Enqueue(new KeyValuePair<ulong, ulong>(objAddr, (ulong)Marshal.SizeOf(obj)));
             if (objAddr == 0)
                 return objAddr;
+            valueMemory.Enqueue(new KeyValuePair<ulong, ulong>(objAddr, (ulong)Marshal.SizeOf(obj)));
             sandbox.MemSetObject(objAddr, obj);
             return objAddr;
         }
@@ -489,9 +494,9 @@ static inline {0} {1}({2}) {{
             if (sandbox == null)
                 return 0;
             ulong objAddr = sandbox.MemMap((ulong)Marshal.SizeOf<T>());
-            valueMemory.Enqueue(new KeyValuePair<ulong, ulong>(objAddr, (ulong)Marshal.SizeOf<T>()));
             if (objAddr == 0)
                 return objAddr;
+            valueMemory.Enqueue(new KeyValuePair<ulong, ulong>(objAddr, (ulong)Marshal.SizeOf<T>()));
             sandbox.MemSetObject(objAddr, obj);
             return objAddr;
         }
@@ -502,9 +507,9 @@ static inline {0} {1}({2}) {{
             if (sandbox == null)
                 return 0;
             ulong strAddr = sandbox.MemMap((ulong)(str.Length + 1));
-            valueMemory.Enqueue(new KeyValuePair<ulong, ulong>(strAddr, (ulong)(str.Length + 1)));
             if (strAddr == 0)
                 return strAddr;
+            valueMemory.Enqueue(new KeyValuePair<ulong, ulong>(strAddr, (ulong)(str.Length + 1)));
             sandbox.MemSetString(strAddr, str);
             return strAddr;
         }
@@ -513,7 +518,7 @@ static inline {0} {1}({2}) {{
         {
             if (sandbox == null)
                 return;
-            if (valueMemory.Count > 16)
+            // if (valueMemory.Count > 16)
             {
                 while (valueMemory.Count > 0)
                 {

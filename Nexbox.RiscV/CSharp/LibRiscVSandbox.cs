@@ -87,7 +87,8 @@ namespace LibRiscV
             LibRiscVSandbox sandbox = handle.Target as LibRiscVSandbox;
             const int REG_A0 = 10;
             sandbox.stdout?.Invoke($"Exit called! Status={regs->r[REG_A0]}");
-            sandbox.Stop();
+            LibRiscVNative.libriscv_stop(machine);
+            // sandbox.Stop();
         }
 
         private static void Syscall_Read(LibRiscVNative.RISCVMachine *machine)
@@ -179,7 +180,7 @@ namespace LibRiscV
             {
                 LibRiscVNative.RISCVOptions options = new LibRiscVNative.RISCVOptions();
                 LibRiscVNative.libriscv_set_defaults(ref options);
-                options.max_memory = 1UL << 30; // 1 GiB(?)
+                // options.max_memory = 1UL << 30; // 1 GiB(?)
                 options.argc = (uint)arr.Length;
                 options.argv = (byte **)dataArr;
                 options.stdin = g_stdin;
@@ -216,7 +217,12 @@ namespace LibRiscV
             if (machine == null)
                 return false;
             stopped = false;
-            LibRiscVNative.libriscv_run(machine, MAX_INSTRUCTIONS);
+            int re = LibRiscVNative.libriscv_run(machine, MAX_INSTRUCTIONS);
+            if (re == 0)
+            {
+                ret = 0;
+                return true;
+            }
             if (LibRiscVNative.libriscv_instruction_counter(machine) >= MAX_INSTRUCTIONS)
             {
                 ret = 0;
@@ -231,6 +237,13 @@ namespace LibRiscV
             if (machine == null)
                 return;
             stopped = true;
+            LibRiscVNative.libriscv_stop(machine);
+        }
+
+        public void Exit()
+        {
+            if (machine == null)
+                return;
             LibRiscVNative.libriscv_stop(machine);
         }
 
@@ -420,13 +433,14 @@ namespace LibRiscV
                 {
                     Convert(regs, i, args[i], ref j);
                 }
-                LibRiscVNative.libriscv_run(machine, MAX_INSTRUCTIONS);
+                LibRiscVNative.libriscv_resume(machine, MAX_INSTRUCTIONS);
+                LibRiscVNative.libriscv_stop(machine);
                 if (machine == null || stopped)
                     return false;
                 ret = LibRiscVNative.libriscv_return_value(machine);
                 // Unsafe.Copy(regs, ref prevRegs);
-                // *regs = prevRegs;
-                // *ctPtr = prevCtPtr;
+                *regs = prevRegs;
+                *ctPtr = prevCtPtr;
                 return true;
             }
             else
