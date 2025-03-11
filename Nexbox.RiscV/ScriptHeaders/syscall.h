@@ -9,7 +9,7 @@
 
 #define USER_SYSCALL 510
 
-STATICFUNC inline long syscall(long n, long arg0, long arg1) {
+STATICFUNC inline long rvsyscall(long n, long arg0, long arg1) {
     register long a0 asm("a0") = arg0;
     register long a1 asm("a1") = arg1;
     register long syscall_id asm("a7") = n;
@@ -28,12 +28,12 @@ STATICFUNC inline float fsyscall(long n, long arg0, long arg1) {
 
 STATICFUNC inline void* psyscall(long n, const void *arg0, const void *arg1) {
     asm("" ::: "memory");
-    return (void*)syscall(n, (long)arg0, (long)arg1);
+    return (void*)rvsyscall(n, (long)arg0, (long)arg1);
 }
 
 STATICFUNC inline long usercall(const char *func, const void *arg) {
     asm("" ::: "memory");
-    return (long)syscall(USER_SYSCALL, (long)func, (long)arg);
+    return (long)rvsyscall(USER_SYSCALL, (long)func, (long)arg);
 }
 
 STATICFUNC inline float fpusercall(const char *func, const void *arg) {

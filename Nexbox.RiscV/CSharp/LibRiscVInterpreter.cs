@@ -77,6 +77,7 @@ static inline {0} {1}({2}) {{
         private Dictionary<ulong, object> targets;
         private ulong targetIdCounter;
         private Queue<KeyValuePair<ulong, ulong>> valueMemory;
+        private bool isYielding = false;
 
         private struct MethodDataInfo
         {
@@ -97,7 +98,12 @@ static inline {0} {1}({2}) {{
 
             public void Exit()
             {
-                e.sandbox.Exit();
+                e.Pause();
+            }
+
+            public void Yield()
+            {
+                e.Yield();
             }
         }
 
@@ -119,6 +125,7 @@ static inline {0} {1}({2}) {{
             targets = new Dictionary<ulong, object>();
             targetIdCounter = 1_000_000_000; // start at 1000000
             valueMemory = new Queue<KeyValuePair<ulong, ulong>>();
+            isYielding = false;
             CreateGlobal("engine", new LibRiscVEngine(this));
             ForwardType("SandboxFunc", typeof(SandboxFunc));
             ForwardType("LibRiscVEngine", typeof(LibRiscVEngine));
@@ -197,6 +204,32 @@ static inline {0} {1}({2}) {{
             }
         }
 
+        public void Pause()
+        {
+            if (sandbox != null)
+            {
+                isYielding = false;
+                sandbox.Pause();
+            }
+        }
+
+        public void Yield()
+        {
+            if (sandbox != null)
+            {
+                isYielding = true;
+                sandbox.Pause();
+            }
+        }
+
+        public void Resume()
+        {
+            if (sandbox != null)
+            {
+                sandbox.Resume();
+            }
+        }
+
         public void Stop()
         {
             stopped = true;
@@ -213,7 +246,9 @@ static inline {0} {1}({2}) {{
 
         public void CallFunction(object func, object args)
         {
-            Jump((ulong)func, (object[])args);
+            if (isYielding)
+                Resume();
+            Jump((ulong)func, !isYielding, (object[])args);
         }
 
         #endregion
@@ -528,11 +563,11 @@ static inline {0} {1}({2}) {{
             }
         }
 
-        public ulong Jump(ulong addr, params object[] args)
+        public ulong Jump(ulong addr, bool resetStack, params object[] args)
         {
             if (sandbox == null)
                 return 0;
-            if (sandbox.CallPtr(addr, out long ret, args))
+            if (sandbox.CallPtr(addr, out long ret, resetStack, args))
             {
                 return unchecked((ulong)ret);
             }

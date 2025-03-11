@@ -124,7 +124,7 @@ LIBRISCVAPI void libriscv_trigger_exception(RISCVMachine *m, unsigned exception,
 /*** RISC-V VM function calls ***/
 
 /* Make preparations for a VM function call. Returns 0 on success. */
-LIBRISCVAPI int libriscv_setup_vmcall(RISCVMachine *m, uint64_t address);
+LIBRISCVAPI int libriscv_setup_vmcall(RISCVMachine *m, uint64_t address, uint8_t reset_stack);
 
 /* Stack realignment helper. */
 #define LIBRISCV_REALIGN_STACK(regs)  ((regs)->r[2] & ~0xFLL)

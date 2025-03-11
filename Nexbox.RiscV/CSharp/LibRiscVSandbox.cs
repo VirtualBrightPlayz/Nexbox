@@ -223,7 +223,7 @@ namespace LibRiscV
                 ret = 0;
                 return true;
             }
-            if (LibRiscVNative.libriscv_instruction_counter(machine) >= MAX_INSTRUCTIONS)
+            if (LibRiscVNative.libriscv_instruction_limit_reached(machine) != 0)
             {
                 ret = 0;
                 return false;
@@ -240,11 +240,18 @@ namespace LibRiscV
             LibRiscVNative.libriscv_stop(machine);
         }
 
-        public void Exit()
+        public void Pause()
         {
             if (machine == null)
                 return;
             LibRiscVNative.libriscv_stop(machine);
+        }
+
+        public int Resume()
+        {
+            if (machine == null)
+                return -1;
+            return LibRiscVNative.libriscv_resume(machine, MAX_INSTRUCTIONS);
         }
 
         public string MemString(ulong src)
@@ -404,16 +411,16 @@ namespace LibRiscV
             }
         }
 
-        public bool Call(string funcName, out long ret, params object[] args)
+        public bool Call(string funcName, out long ret, bool resetStack, params object[] args)
         {
             ret = 0;
             if (machine == null || stopped)
                 return false;
             ulong vaddr = LibRiscVNative.libriscv_address_of(machine, funcName);
-            return CallPtr(vaddr, out ret, args);
+            return CallPtr(vaddr, out ret, resetStack, args);
         }
 
-        public bool CallPtr(ulong vaddr, out long ret, params object[] args)
+        public bool CallPtr(ulong vaddr, out long ret, bool resetStack, params object[] args)
         {
             ret = 0;
             if (machine == null || stopped)
@@ -427,7 +434,7 @@ namespace LibRiscV
             ulong prevCtPtr = *ctPtr;
             LibRiscVNative.RISCVRegisters *regs = LibRiscVNative.libriscv_get_registers(machine);
             LibRiscVNative.RISCVRegisters prevRegs = *regs;
-            if (LibRiscVNative.libriscv_setup_vmcall(machine, vaddr) == 0)
+            if (LibRiscVNative.libriscv_setup_vmcall(machine, vaddr, (byte)(resetStack ? 1 : 0)) == 0)
             {
                 for (int i = 0, j = 0; i < args.Length; i++)
                 {

@@ -100,6 +100,9 @@ namespace LibRiscV
         [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]
         public static extern UInt64* libriscv_max_counter_pointer(RISCVMachine* m);
 
+        [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]
+        public static extern int libriscv_instruction_limit_reached(RISCVMachine* m);
+
         public delegate void riscv_syscall_handler_t(RISCVMachine* m);
 
         [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]
@@ -115,7 +118,7 @@ namespace LibRiscV
         public static extern void libriscv_trigger_exception(RISCVMachine* m, uint exception, UInt64 data);
 
         [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]
-        public static extern int libriscv_setup_vmcall(RISCVMachine* m, UInt64 address);
+        public static extern int libriscv_setup_vmcall(RISCVMachine* m, UInt64 address, byte reset_stack);
 
         public static UInt64 LIBRISCV_ARG_REGISTER_GET(RISCVRegisters* regs, int n)
         {

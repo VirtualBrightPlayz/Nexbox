@@ -1,6 +1,7 @@
 #include "libriscv.h"
 
 #include <libriscv/machine.hpp>
+#include <libriscv/threads.hpp>
 
 #undef stdout
 #undef stdin
@@ -238,11 +239,13 @@ int libriscv_jump(RISCVMachine *m, uint64_t address)
 	return RISCV_ERROR_TYPE_GENERAL_EXCEPTION;
 }
 extern "C"
-int libriscv_setup_vmcall(RISCVMachine *m, uint64_t address)
+int libriscv_setup_vmcall(RISCVMachine *m, uint64_t address, uint8_t reset_stack)
 {
 	try {
 		auto* machine = MACHINE(m);
-		machine->cpu.reset_stack_pointer();
+		if (reset_stack != 0) {
+			machine->cpu.reset_stack_pointer();
+		}
 		machine->reset_instruction_counter();
 		machine->setup_call();
 		machine->cpu.jump(address);

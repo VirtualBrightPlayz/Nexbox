@@ -1,22 +1,32 @@
 #include "api.h"
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <pthread.h>
 
-void test() {
-    tools_Clear();
-    tools_set_Color(12);
-    tools_Write("hi\n");
-    tools_ResetColor();
-}
-
-void timer(long delta) {
-    printf("%ld\n", delta);
+void do_work() {
+    while (true) {
+        printf("test\n");
+        char buffer[BUFSIZ];
+        // fgets(buffer, BUFSIZ, stdin);
+        // printf(buffer);
+        // fflush(stdout);
+        LibRiscVEngine_Exit(get_engine());
+    }
 }
 
 int main() {
-    test();
-    SandboxFunc func = SandboxFunc_new_1(get_engine());
-    SandboxFunc_SetAction(func, (Object)timer);
-    tools_SetTick(func);
+    // int pipefd[2];
+    // if (pipe(pipefd) != 0) {
+    //     printf("failed to make pipe\n");
+    //     return 1;
+    // }
+    pthread_t thread;
+    pthread_create(&thread, NULL, &do_work, NULL);
+    LibRiscVEngine_Exit(get_engine());
+    pthread_join(thread, NULL);
     return 0;
 }
