@@ -79,6 +79,9 @@ static inline {0} {1}({2}) {{
         private Queue<KeyValuePair<ulong, ulong>> valueMemory;
         private int isYielding = 0;
 
+        [ThreadStatic]
+        private static Dictionary<int, object[]> argsCache = new Dictionary<int, object[]>();
+
         private struct MethodDataInfo
         {
             public MethodBase method;
@@ -271,20 +274,28 @@ static inline {0} {1}({2}) {{
 
         private unsafe object ConvertArg(ulong argAddr, Type argType)
         {
-            if (argType == typeof(string))
-            {
-                return MemGetString(MemGetPtr(argAddr));
-            }
-            else if (argType.IsArray)
+            if (argType.IsArray)
             {
                 CArray cArray = (CArray)MemGetObjectFromType(argAddr, typeof(CArray));
-                Array arr = Array.CreateInstance(argType.GetElementType(), cArray.Length);
+                Type vtype = argType.GetElementType();
+                uint vsize = (uint)Marshal.SizeOf(vtype);
+                Array arr = Array.CreateInstance(vtype, cArray.Length);
+                if (vtype.IsValueType)
+                {
+                    byte* ptr = sandbox.MemGetPtr(cArray.Data, (uint)cArray.Length * vsize);
+                    Buffer.MemoryCopy(ptr, Marshal.UnsafeAddrOfPinnedArrayElement(arr, 0).ToPointer(), (uint)cArray.Length * vsize, (uint)cArray.Length * vsize);
+                    return arr;
+                }
                 for (uint i = 0; i < cArray.Length; i++)
                 {
-                    object data = ConvertArg(cArray.Data + i * (uint)Marshal.SizeOf(argType.GetElementType()), argType.GetElementType());
+                    object data = ConvertArg(cArray.Data + i * vsize, vtype);
                     arr.SetValue(data, i);
                 }
                 return arr;
+            }
+            else if (argType == typeof(string))
+            {
+                return MemGetString(MemGetPtr(argAddr));
             }
             else if (!argType.IsValueType)
             {
@@ -358,44 +369,15 @@ static inline {0} {1}({2}) {{
                         MethodBase method = mkvp.Value.method;
                         Type[] mArgs = mkvp.Value.parameters;
                         UserArgStruct args = MemGetObject<UserArgStruct>(vaddr);
-                        ulong[] ptrArr = new ulong[mArgs.Length];
-                        for (int i = 0; i < mArgs.Length; i++)
+                        object[] argArr = null;
+                        if (!argsCache.TryGetValue(mArgs.Length, out argArr))
                         {
-                            // if (args.args[i] == 0)
-                            //     ptrArr[i] = 0;
-                            // else
-                            //     ptrArr[i] = MemGetPtr(args.args[i]);
+                            argArr = new object[mArgs.Length];
+                            argsCache.Add(mArgs.Length, argArr);
                         }
-                        object[] argArr = new object[mArgs.Length];
                         for (int i = 0; i < mArgs.Length; i++)
                         {
                             argArr[i] = ConvertArg(args.args[i], mArgs[i]);
-                            continue;
-                            // TODO: add support for arrays
-                            if (mArgs[i] == typeof(string))
-                            {
-                                argArr[i] = MemGetString(ptrArr[i]);
-                            }
-                            else if (!mArgs[i].IsValueType)
-                            {
-                                if (ptrArr[i] == 0)
-                                {
-                                    argArr[i] = null;
-                                }
-                                else if (targets.TryGetValue(ptrArr[i], out var targ))
-                                {
-                                    argArr[i] = targ;
-                                }
-                                else
-                                {
-                                    argArr[i] = ptrArr[i];
-                                }
-                            }
-                            else
-                            {
-                                object arg = MemGetObjectFromType(args.args[i], mArgs[i]);
-                                argArr[i] = arg;
-                            }
                         }
                         object target = null;
                         if (args.target != 0)
@@ -483,14 +465,29 @@ static inline {0} {1}({2}) {{
         public unsafe ulong MemGetPtr(ulong vaddr)
         {
             IntPtr ptr = sandbox.MemObject(vaddr, sizeof(ulong));
-            ReadOnlySpan<byte> span = new ReadOnlySpan<byte>(ptr.ToPointer(), sizeof(ulong));
-            return BitConverter.ToUInt64(span.ToArray(), 0);
+            Span<byte> span = new Span<byte>(ptr.ToPointer(), sizeof(ulong));
+            return MemoryMarshal.Cast<byte, ulong>(span)[0];
+            // return ulong.TryParse(span, out ulong res) ? res : default;
+            // return BitConverter.ToUInt64(span, 0);
+        }
+
+        public unsafe void MemGetPtrArr<T>(ulong vaddr, IntPtr arr, int idx) where T : unmanaged
+        {
+            IntPtr ptr = sandbox.MemObject(vaddr, sizeof(ulong));
+            Span<byte> span = new Span<byte>(ptr.ToPointer(), sizeof(ulong));
+            T ul = MemoryMarshal.Cast<byte, T>(span)[0];
+            ((T*)arr.ToPointer())[idx] = ul;
+        }
+
+        public unsafe object MemGetStructFromType(ulong vaddr, Type type)
+        {
+            uint size = (uint)Marshal.SizeOf(type);
+            IntPtr ptr = sandbox.MemObject(vaddr, size);
+            return Marshal.PtrToStructure(ptr, type);
         }
 
         public unsafe object MemGetObjectFromType(ulong vaddr, Type type)
         {
-            if (sandbox == null)
-                return default;
             if (type == typeof(bool))
                 return (MemGetPtr(vaddr) & 1) != 0;
             if (type == typeof(ulong))
@@ -501,15 +498,49 @@ static inline {0} {1}({2}) {{
                 return unchecked((uint)MemGetPtr(vaddr));
             if (type == typeof(int))
                 return unchecked((int)MemGetPtr(vaddr));
+            if (type == typeof(byte))
+                return unchecked((byte)MemGetPtr(vaddr));
             if (type == typeof(float))
             {
                 Span<ulong> sp = stackalloc ulong[1];
                 sp[0] = MemGetPtr(vaddr);
                 return MemoryMarshal.Cast<ulong, float>(sp)[0];
             }
-            uint size = (uint)Marshal.SizeOf(type);
-            IntPtr ptr = sandbox.MemObject(vaddr, size);
-            return Marshal.PtrToStructure(ptr, type);
+            return MemGetStructFromType(vaddr, type);
+        }
+
+        public unsafe void MemGetObjectFromTypeArray(ulong vaddr, Type type, IntPtr arr, int offset)
+        {
+            if (type == typeof(bool))
+            {
+                bool* dat = (bool*)arr.ToPointer();
+                dat[offset] = (MemGetPtr(vaddr) & 1) != 0;
+            }
+            else if (type == typeof(ulong))
+                MemGetPtrArr<ulong>(vaddr, arr, offset);
+            else if (type == typeof(long))
+                MemGetPtrArr<long>(vaddr, arr, offset);
+            else if (type == typeof(uint))
+                MemGetPtrArr<uint>(vaddr, arr, offset);
+            else if (type == typeof(int))
+                MemGetPtrArr<int>(vaddr, arr, offset);
+            else if (type == typeof(byte))
+                MemGetPtrArr<byte>(vaddr, arr, offset);
+            else if (type == typeof(float))
+            {
+                Span<ulong> sp = stackalloc ulong[1];
+                sp[0] = MemGetPtr(vaddr);
+                float f = MemoryMarshal.Cast<ulong, float>(sp)[0];
+                ((float*)arr.ToPointer())[offset] = f;
+            }
+            else
+            {
+                uint size = (uint)Marshal.SizeOf(type);
+                IntPtr ptr = sandbox.MemObject(vaddr, size);
+                Buffer.MemoryCopy(ptr.ToPointer(), (arr + offset).ToPointer(), size, size);
+                // Marshal.PtrToStructure(ptr, type);
+                // arr.SetValue(MemGetStructFromType(vaddr, type), idx);
+            }
         }
 
         public ulong MemAllocObject(object obj)

@@ -359,6 +359,13 @@ namespace LibRiscV
             return data;
         }
 
+        public unsafe byte* MemGetPtr(ulong src, uint size)
+        {
+            if (machine == null || stopped)
+                return default;
+            return LibRiscVNative.libriscv_memview(machine, src, size);
+        }
+
         public void MemSetObject(ulong addr, object obj)
         {
             if (machine == null || stopped)
