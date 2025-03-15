@@ -2,6 +2,7 @@
 
 #include <libriscv/machine.hpp>
 #include <libriscv/threads.hpp>
+#include <libriscv/debug.hpp>
 
 #undef stdout
 #undef stdin
@@ -105,6 +106,15 @@ int libriscv_delete(RISCVMachine *m)
 	{
 		return -1;
 	}
+}
+
+extern "C"
+void libriscv_print_backtrace(RISCVMachine *m)
+{
+	MACHINE(m)->memory.print_backtrace(
+		[&] (std::string_view line) {
+			MACHINE(m)->print(line.data(), line.size());
+		});
 }
 
 extern "C"

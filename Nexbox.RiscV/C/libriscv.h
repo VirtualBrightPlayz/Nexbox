@@ -48,6 +48,7 @@ LIBRISCVAPI RISCVMachine *libriscv_new(const void *elf_prog, unsigned elf_size, 
 /* Free a RISC-V machine created using libriscv_new. */
 LIBRISCVAPI int libriscv_delete(RISCVMachine *m);
 
+LIBRISCVAPI void libriscv_print_backtrace(RISCVMachine *m);
 
 /* Start execution at current PC, with the given instruction limit. 0 on success.
    When an error occurs, the negative value is one of the RISCV_ERROR_ enum values. */

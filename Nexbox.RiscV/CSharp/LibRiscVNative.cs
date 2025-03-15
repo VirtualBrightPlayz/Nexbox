@@ -56,6 +56,9 @@ namespace LibRiscV
         public static extern int libriscv_delete(RISCVMachine* m);
 
         [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]
+        public static extern void libriscv_print_backtrace(RISCVMachine *m);
+
+        [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]
         public static extern int libriscv_run(RISCVMachine* m, UInt64 instruction_limit);
 
         [DllImport(DLL_NAME, CallingConvention = DLL_DECL)]

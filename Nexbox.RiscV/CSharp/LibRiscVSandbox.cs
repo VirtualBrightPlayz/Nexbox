@@ -68,6 +68,8 @@ namespace LibRiscV
         {
             GCHandle handle = (GCHandle)opaque;
             LibRiscVSandbox sandbox = handle.Target as LibRiscVSandbox;
+            if (msg == null)
+                return;
             string str = Marshal.PtrToStringAnsi((IntPtr)msg, (int)size);
             sandbox.stdout?.Invoke(str);
         }
@@ -76,9 +78,10 @@ namespace LibRiscV
         {
             GCHandle handle = (GCHandle)opaque;
             LibRiscVSandbox sandbox = handle.Target as LibRiscVSandbox;
+            sandbox.Stop();
             string str = Marshal.PtrToStringAnsi((IntPtr)msg);
             sandbox.stderr?.Invoke(type, str, data);
-            sandbox.Stop();
+            LibRiscVNative.libriscv_print_backtrace(sandbox.machine);
         }
 
         private static void Syscall_Exit(LibRiscVNative.RISCVMachine *machine)
@@ -181,7 +184,7 @@ namespace LibRiscV
             {
                 LibRiscVNative.RISCVOptions options = new LibRiscVNative.RISCVOptions();
                 LibRiscVNative.libriscv_set_defaults(ref options);
-                // options.max_memory = 1UL << 30; // 1 GiB(?)
+                options.max_memory = 1024UL * 1024UL * 1024UL * 1UL; // 1 GiB(?)
                 options.argc = (uint)arr.Length;
                 options.argv = (byte **)dataArr;
                 options.stdin = g_stdin;
