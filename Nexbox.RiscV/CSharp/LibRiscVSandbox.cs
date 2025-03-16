@@ -81,7 +81,8 @@ namespace LibRiscV
             sandbox.Stop();
             string str = Marshal.PtrToStringAnsi((IntPtr)msg);
             sandbox.stderr?.Invoke(type, str, data);
-            LibRiscVNative.libriscv_print_backtrace(sandbox.machine);
+            if (sandbox.machine != null)
+                LibRiscVNative.libriscv_print_backtrace(sandbox.machine);
         }
 
         private static void Syscall_Exit(LibRiscVNative.RISCVMachine *machine)
