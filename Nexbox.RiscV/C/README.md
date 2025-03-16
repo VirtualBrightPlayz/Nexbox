@@ -47,7 +47,7 @@ Inside the `bin` folder, you will find `riscv64-linux-musl-gcc`, which is our C 
 In order to compile, you must statically link a program. Example command:
 
 ```bash
-riscv64-linux-musl-gcc -march=rv64g -mabi=lp64d -fPIC -static -O2 -fpermissive test.cpp -o test.elf
+riscv64-linux-musl-gcc -march=rv64g -mabi=lp64d -static -fPIC -fPIE -O2 test.cpp -o test.elf
 ```
 
 ### GNU C Library
