@@ -108,6 +108,8 @@ LIBRISCVAPI uint64_t libriscv_instruction_counter(RISCVMachine *m);
 /* Return a *pointer* to the instruction max counter. */
 LIBRISCVAPI uint64_t * libriscv_max_counter_pointer(RISCVMachine *m);
 
+LIBRISCVAPI int libriscv_instruction_limit_reached(RISCVMachine *m);
+
 /*** RISC-V system call handling ***/
 
 typedef void (*riscv_syscall_handler_t)(RISCVMachine *m);
